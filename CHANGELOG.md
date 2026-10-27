@@ -63,6 +63,18 @@
   低于本机实测加载耗时（pyannote 379s / IndexTTS 218s），会在冷机上
   把好环境误判成失败。改为默认 600s、可用 `MT_SELFTEST_IMPORT_TIMEOUT`
   覆盖，且**超时与导入报错分离**（超时记"未判定"提示，不计失败）
+- 立版本基线：`VERSION` 0.9.0、`CHANGELOG.md`、`.gitignore`（权重/环境/
+  项目数据/素材视频不入库）、`LICENSE`（MIT）
+- 两种发行形态落地：
+  - `scripts/publish.py lite` → 245 MB 源码包，双击 `1_安装.bat` 联网装
+  - `scripts/publish.py full` → 整合包，双击 `安装_离线.bat` 从包内
+    `wheels/` 建环境，全程不联网
+  - `scripts/make_wheelhouse.py` → 从四个 venv 导出依赖并下载成离线 wheel
+  - `scripts/setup_envs_offline.py` → 用包内 wheel 离线重建四个环境
+- `scripts/setup_envs.py` 去掉对本机 Python 路径的硬依赖：改为
+  「显式候选 → 环境变量（`MT_PY312`/`MT_PY311`/`MT_UV`）→ py 启动器 → PATH」
+  依次查找；`uv` 改为惰性查找，没装 uv 不再挡住 base/sep/asr
+
 
 ---
 

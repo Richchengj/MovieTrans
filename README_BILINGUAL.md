@@ -103,6 +103,18 @@ python scripts/selftest.py
 
 ## 快速开始 / Quick Start
 
+### 方式零：发行包 / Option 0: Distribution packages
+
+| 形态 / Form | 体积 / Size | 安装 / Install | 适合 / For |
+|---|---|---|---|
+| **lite** | 245 MB | 双击 `1_安装.bat`（建环境 + 下 14 GB 权重）/ run `1_安装.bat` (build envs + fetch 14 GB weights) | 有网络 / online |
+| **full** | 约 24 GB | 双击 `安装_离线.bat`，全程不联网 / run `安装_离线.bat`, fully offline | 内网 / offline |
+
+两种都需要 Python 3.12 + 3.11，解压到英文路径。装完双击 `2_启动.bat`。
+/ Both need Python 3.12 + 3.11, and an ASCII-only path. Then run `2_启动.bat`.
+
+出包 / Build: `python scripts/publish.py lite` / `publish.py full`.
+
 ### 方式一：Web 界面（推荐） / Option 1: Web UI (recommended)
 
 ```powershell

@@ -30,15 +30,22 @@
 | env_tts（IndexTTS 2.5） | ✅ | 断链 junction 修复后冒烟通过（py3.11.13 + torch 2.8.0+cu128 + CUDA True） |
 | GPT-SoVITS 备选引擎 | ✅ 部署就绪 | D:\GPT-SoVITS（v2final 底模），散人音色双引擎合成验证；s07 接入未做（排期见下） |
 
-### 发布形态
+### 发布形态（2026-10-27 定版：两个开源版本）
 
-| 位置 | 用途 |
-|---|---|
-| `E:\MovieTrans` | 开发主仓（2026-10-18 由 `D:\电影翻译` 迁入，ASCII 根；权重在其 `models/`） |
-| `E:\MovieTrans-src` | 纯源码包（无权重，fetch_models.py 下载）——**产物当前离线**，`python scripts/publish.py src` 重新生成即可 |
-| `E:\MovieTrans-pub` | 整合发布包（15GB 权重 + ffmpeg）——**可落实**：2026-10-27 复核 E 盘已扩至 932G（可用 542G），原「仅 30G、与 dev 副本无法共存」的暂缓理由已失效 |
-| `E:\MovieTrans-dev` | 换机开发副本（26→33GB）——**可落实**（同上） |
-| `E:\dub_projects` | 正式项目区——**暂缓**：项目数据先随开发仓 `projects/`，成片积累到一定量再外迁 |
+| 形态 | 产物 | 体积 | 安装方式 | 状态 |
+|---|---|---|---|---|
+| **lite** | `E:\MovieTrans-lite` | 245 MB | 双击 `1_安装.bat`：`setup_envs.py` 建 4 个环境（清华 pip 源）+ `fetch_models.py` 下 14 GB 权重（魔搭优先 3.7 MB/s） | ✅ 已生成验证 |
+| **full** | `E:\MovieTrans-full` | 约 24 GB（权重 14 + wheels 10 + 工具） | 双击 `安装_离线.bat`：从包内 `wheels/` 建环境，**全程不联网** | 🔶 流程已通（`--no-models` 试产 286 MB 通过）；待全量 wheel 下载后出正式包 |
+| 开发主仓 | `E:\MovieTrans` | — | git 基线 `v0.9.0`（commit 6eb4e8d） | ✅ |
+| `E:\MovieTrans-dev` | 换机开发副本 | 26–33 GB | 待定，E 盘已扩至 932G 可落实 | ⏸ |
+
+**打包关键约束（已写进 `publish.py` 并处理）**：
+1. `envs/env_tts` 是 junction，实体在 `tools/index-tts/.venv` —— 普通递归复制会得到空壳或重复 7 GB
+2. **Windows venv 不可跨机搬迁**（`pyvenv.cfg` 存绝对路径），所以 full 不塞 venv，改为「包内 Python + 离线 wheel」，首次安装现建
+3. `make_wheelhouse.py` 需把 `xxx @ file:///…whl` 形式的本地依赖还原成 `xxx==版本+cuXXX`（env_tts 的 torch 当年是本地 wheel 装的，那些 wheel 已随 work/ 清理删除）
+
+---
+
 
 ### 已知遗留（用户听片后定夺）
 
@@ -246,3 +253,4 @@ s09 混音命令行 32767 字符上限（改 ≤100 段/批分窗 + concat）。
 | 2026-10-22（下午） | **WebUI 冒烟回归固化**（I-6）：新增 `scripts/webui_smoke.py`（纯标准库自动起临时服务，API/页面层 10 项断言）+ `scripts/webui_smoke_ui.js`（Playwright，`--ui` 触发，12 项流程断言，用系统 Edge 免下浏览器）；实测 10/10 与 11/11 全过；README 中英双语命令速查补入口 |
 | 2026-10-22（晚） | **按 A/D 双片实测结果做七处调整（I-7~I-10 落地）**：①`new_project` 自动继承最近带 API Key 项目的 translation/tts（`--config-from`/`--no-inherit`），修「新项目静默退回本地翻译」②s05 回退提示加 ⚠ 并在汇总行标「local（回退，无 Key）」③`run_stage(partial=可调用)` + `s07._manifest_coverage`：分批补跑跑满即标 done，不再需要手改 state ④s07 每 10 段打进度/ETA，段均超 `tts.slow_segment_seconds`(20s) 告警给三条建议；manifest 每段记 `engine`/`elapsed`，顶层记本次引擎 ⑤qc 声纹按说话人拆开报（点名差分者 + 换参考的指路），新增「参考音频」「引擎一致性」两项 → 13 项 ⑥s06 参考段跨时间轴分箱抽样（`tts.ref_spread`）+ 短参考告警（`tts.ref_short_warn_seconds`）⑦GSV 启动即打印「零样本不可交付」告警并降级定位。**实测复核**：D 10/11→11/13（声纹 0.15 FAIL，明细指出 SPK_04 占 63% 段/0.13）、A 11/11→12/13（唯一 WARN=混用引擎，声纹 0.34）；参考段三组对照差异 ±0.01（噪声内，属防御性改动）；selftest 57/0→65/0。文档：BENCHMARK 纠正「参考段被污染」误判并补数据、SPEC 7.1 改 13 项 + 抽样说明、README 改 13 项与 new_project 用法 |
 | 2026-10-27 | **发布前体检：selftest 导入超时误判修复**。复跑自检得 64/2/1，两条 FAIL 均为 `run_import` 固定 300s 超时（env_sep demucs / env_tts indextts / env_asr pyannote）。单独计时确认环境无损坏：热盘 demucs 46s、IndexTTS 218s、pyannote **379s**（已超 300s），冷盘首次读 14G 权重更久。修：①上限提至 600s 并可用 `MT_SELFTEST_IMPORT_TIMEOUT` 覆盖 ②超时与导入报错分离——超时记「未判定」入环境提示、不计 FAIL、退出码仍 0，明细给出重跑/调大超时的建议（避免「发布前必须 0 失败」这条纪律在冷机翻车）③删除死函数 `env_ready`。验证：默认下限 67 通过/0 失败；把上限压到 1s 做极值测试 → 62 通过/0 失败/5 项超时提示、退出码 0。文档同步：ROADMAP 基线快照（49/0→67/0、qc 10→13 项、补 A/D 两行实测、发布形态表按 E 盘已扩至 932G 的实况修订——原「仅 30G」暂缓理由失效）、`需要人工操作.md` 质检 11→13 项 |
+| 2026-10-27（发行） | **两个开源发行形态落地 v0.9.0**：①git 基线（`.gitignore` 排除 14G 权重 / 19G 环境 / 项目数据 / 素材视频，入库 390 文件 888KB；tag `v0.9.0`）+ `LICENSE`(MIT) + `VERSION` + `CHANGELOG` ②`publish.py` 重写为 lite/full 双目标，`_copy_tree` 对 junction **只记录不跟随**（否则 env_tts 被打成空壳或重复 7G），full 带 manifest.json ③新增 `make_wheelhouse.py`：四个 venv 导出依赖 → pip download 到同一仓库，并把 `pkg @ file:///…whl` 还原成 `pkg==ver+cuXXX`（env_tts 的 torch 当年是本地 wheel 装的，那些 wheel 已随 work/ 清理删掉，不还原必然装不上）④新增 `setup_envs_offline.py`：从包内 wheels 离线重建四个环境（半成品自动隔离为 `_broken_*`）⑤`setup_envs.py` 去掉本机 Python 路径硬依赖（候选 → `MT_PY312/MT_PY311/MT_UV` → py 启动器 → PATH；uv 改惰性查找，没 uv 不挡 base/sep/asr）。**实测**：lite 245MB、full `--no-models` 286MB 均生成通过，包内无 `__pycache__`/无 venv 残留；base 环境 24 个依赖 wheel 实测下载成功；`setup_envs_offline.py --check` 缺 wheels 时正确 fail-fast（exit 2）。待办：全量 wheel 下载（约 10G，`make_wheelhouse.py` 全跑）后出正式 full 包 |

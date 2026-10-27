@@ -51,16 +51,52 @@ UV_CANDIDATES = [
 ]
 
 
-def find_py(candidates: list[Path], ver: str) -> Path:
+def find_py(candidates: list[Path], ver: str, env_var: str = "", launcher: str = "") -> Path:
+    """按「显式候选 → 环境变量 → py 启动器 → PATH」的顺序找一个解释器。
+
+    2026-10-27 起不再只认本机写死的路径：轻量发行版要在别人的机器上跑，
+    只要装了官方 Python（带 py 启动器）或 uv 就能自动找到。
+    仍可用环境变量强制指定，例如 `set MT_PY311=D:\\Python311\\python.exe`。
+    """
     for p in candidates:
         if p.exists():
             return p
-    raise SystemExit(f"找不到 Python {ver}：请把解释器路径加进 setup_envs.py 顶部候选列表")
+    if env_var and os.environ.get(env_var):
+        p = Path(os.environ[env_var])
+        if p.exists():
+            return p
+    if launcher:
+        try:
+            r = subprocess.run(
+                ["py", launcher, "-c", "import sys;print(sys.executable)"],
+                capture_output=True, text=True, timeout=30,
+            )
+            if r.returncode == 0 and r.stdout.strip():
+                p = Path(r.stdout.strip())
+                if p.exists():
+                    return p
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+    if launcher == "-3.12" or launcher == "-3.11":
+        p = shutil.which(f"python{launcher[1:]}")
+        if p:
+            return Path(p)
+    hint = f"，或设环境变量 {env_var}" if env_var else ""
+    raise SystemExit(
+        f"找不到 Python {ver}{hint}。\n"
+        f"  官方安装包：https://www.python.org/downloads/windows/（勾选 py launcher）\n"
+        f"  国内镜像：https://mirrors.huaweicloud.com/python/"
+    )
 
 
-PY312 = find_py(PY312_CANDIDATES, "3.12")
-PY311 = find_py(PY311_CANDIDATES, "3.11")
-UV = find_py(UV_CANDIDATES, "uv")
+PY312 = find_py(PY312_CANDIDATES, "3.12", "MT_PY312", "-3.12")
+PY311 = find_py(PY311_CANDIDATES, "3.11", "MT_PY311", "-3.11")
+
+
+def find_uv() -> Path:
+    """uv 只有 env_tts 需要，惰性查找——没装 uv 不该挡住 base/sep/asr。"""
+    p = find_py(UV_CANDIDATES, "uv", "MT_UV", "")
+    return p
 
 
 def venv_python(name: str) -> Path:
@@ -164,7 +200,7 @@ def build_tts() -> None:
             dot_venv.rename(dst)
             print(f"[quarantine] {dot_venv} -> {dst}")
         # uv sync 幂等：包齐了秒过，缺了续装
-        run([UV, "sync", "--extra", "webui",
+        run([find_uv(), "sync", "--extra", "webui",
              "--default-index", "https://mirrors.aliyun.com/pypi/simple",
              "--python", PY311], cwd=repo)
         # uv 装的 torch 2.7+ PyPI Windows wheel 自带 CUDA 12.6，先探测；

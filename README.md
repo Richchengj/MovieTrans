@@ -127,6 +127,21 @@ python scripts/selftest.py
 
 ## 快速开始
 
+### 方式零：拿到发行包（新用户推荐）
+
+项目出两种开源包，内容一样、装法不同：
+
+| 形态 | 体积 | 怎么装 | 适合 |
+|---|---|---|---|
+| **lite** | 245 MB | 双击 `1_安装.bat`：建四个 Python 环境（清华源）+ 下 14 GB 权重（魔搭镜像，可续传） | 有网络，愿意等下载 |
+| **full** | 约 24 GB | 双击 `安装_离线.bat`：从包内 `wheels/` 建环境，**全程不联网**；权重已在包内 | 内网、网络不稳 |
+
+两种都需要 **Python 3.12 + 3.11**（[官方安装包](https://www.python.org/downloads/windows/)，
+勾 py launcher；国内可用[华为云镜像](https://mirrors.huaweicloud.com/python/)），
+解压到**英文路径**（含中文会让部分 C++ 库报错）。装完双击 `2_启动.bat`。
+
+自己出包：`python scripts/publish.py lite` / `publish.py full`（见脚本头部说明）。
+
 ### 方式一：Web 界面（推荐）
 
 ```powershell
