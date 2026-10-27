@@ -1,0 +1,1631 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>影视配音流水线</title>
+<style>
+:root{
+  --bg:#0f1115; --panel:#171a21; --panel2:#1d212b; --border:#2a2f3c;
+  --text:#e6e9f0; --dim:#8b93a7; --accent:#4f8cff; --accent2:#3a6fd8;
+  --ok:#3ecf8e; --warn:#f5b942; --err:#f0616d;
+  --mono:Consolas,"Cascadia Mono",monospace;
+  --radius:10px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);
+  font-family:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;font-size:14px}
+a{color:var(--accent);text-decoration:none}
+h1,h2,h3{margin:0 0 8px}
+small,.dim{color:var(--dim)}
+.mono{font-family:var(--mono)}
+
+/* ---------- 布局 ---------- */
+header{display:flex;align-items:center;gap:14px;padding:12px 22px;
+  border-bottom:1px solid var(--border);background:var(--panel);
+  position:sticky;top:0;z-index:20}
+header .logo{font-size:17px;font-weight:600;letter-spacing:.5px;white-space:nowrap}
+header select{min-width:240px}
+.spacer{flex:1}
+nav{display:flex;gap:4px;padding:0 22px;border-bottom:1px solid var(--border);background:var(--panel)}
+nav button{background:none;border:none;color:var(--dim);font-size:14px;padding:11px 16px;
+  cursor:pointer;border-bottom:2px solid transparent}
+nav button.active{color:var(--text);border-bottom-color:var(--accent)}
+nav button:hover{color:var(--text)}
+main{max-width:1180px;margin:0 auto;padding:20px 22px 60px}
+section.tab{display:none}
+section.tab.active{display:block}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);
+  padding:16px 18px;margin-bottom:16px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:900px){.grid2{grid-template-columns:1fr}}
+
+/* ---------- 控件 ---------- */
+button.btn{background:var(--accent);color:#fff;border:none;border-radius:7px;
+  padding:8px 16px;font-size:14px;cursor:pointer}
+button.btn:hover{background:var(--accent2)}
+button.btn:disabled{background:#39415a;cursor:not-allowed}
+button.btn.ghost{background:transparent;border:1px solid var(--border);color:var(--text)}
+button.btn.ghost:hover{border-color:var(--accent);color:var(--accent)}
+button.btn.danger{background:var(--err)}
+button.btn.small{padding:4px 10px;font-size:12px;border-radius:6px}
+input[type=text],input[type=password],input[type=number],select,textarea{
+  background:var(--panel2);border:1px solid var(--border);color:var(--text);
+  border-radius:7px;padding:7px 10px;font-size:13.5px;font-family:inherit;width:100%}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
+input[type=checkbox],input[type=radio]{accent-color:var(--accent);transform:translateY(1px);margin-right:4px}
+label{cursor:pointer}
+.field{margin-bottom:12px}
+.field>.label{display:block;margin-bottom:5px;color:var(--dim);font-size:12.5px}
+.field .hint{margin-top:4px;font-size:12px;color:var(--dim)}
+.row{display:flex;gap:12px}
+.row>.field{flex:1}
+fieldset{border:1px solid var(--border);border-radius:var(--radius);
+  padding:12px 14px 6px;margin:0 0 14px}
+legend{color:var(--dim);font-size:12.5px;padding:0 6px}
+.stage-tag{display:inline-block;background:#20304f;color:var(--accent);border-radius:5px;
+  padding:1px 7px;font-size:11.5px;font-weight:600;margin-right:6px;font-family:var(--mono)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{color:var(--dim);font-weight:500;text-align:left;padding:7px 8px;
+  border-bottom:1px solid var(--border);font-size:12.5px;white-space:nowrap}
+td{padding:7px 8px;border-bottom:1px solid #20242e;vertical-align:top}
+tr:last-child td{border-bottom:none}
+pre{background:#0b0d11;border:1px solid var(--border);border-radius:8px;
+  padding:12px;overflow:auto;font-family:var(--mono);font-size:12px;line-height:1.55;
+  color:#c9d3e8;margin:0;white-space:pre-wrap;word-break:break-all}
+audio{width:100%;height:34px}
+video{width:100%;border-radius:8px;background:#000;max-height:460px}
+
+/* ---------- 徽标 ---------- */
+.badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:99px;
+  font-size:12.5px;border:1px solid var(--border);color:var(--dim);background:var(--panel2);white-space:nowrap}
+.badge.ok{color:var(--ok);border-color:#245a43}
+.badge.err{color:var(--err);border-color:#5a2b31}
+.badge.warn{color:var(--warn);border-color:#5a4b25}
+.badge.run{color:var(--accent);border-color:var(--accent);animation:pulse 1.2s infinite}
+@keyframes pulse{50%{opacity:.55}}
+.dot{width:8px;height:8px;border-radius:50%;background:currentColor}
+
+/* 单选项卡片 */
+.radios{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.radio-card{display:flex;align-items:flex-start;gap:8px;background:var(--panel2);
+  border:1px solid var(--border);border-radius:8px;padding:9px 11px;cursor:pointer}
+.radio-card.checked{border-color:var(--accent);background:#20304f}
+.radio-card .t{font-size:13px;font-weight:600}
+.radio-card .d{font-size:11.5px;color:var(--dim);margin-top:2px}
+
+/* 模态框 */
+.modal-mask{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:50;
+  display:none;align-items:flex-start;justify-content:center;padding-top:8vh}
+.modal-mask.open{display:flex}
+.modal{background:var(--panel);border:1px solid var(--border);border-radius:12px;
+  width:min(680px,92vw);max-height:80vh;display:flex;flex-direction:column}
+.modal .hd{display:flex;align-items:center;padding:14px 18px;border-bottom:1px solid var(--border)}
+.modal .hd b{flex:1}
+.modal .bd{padding:16px 18px;overflow:auto}
+.modal .ft{padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end}
+
+/* 文件浏览 */
+.browse-list{max-height:46vh;overflow:auto;border:1px solid var(--border);
+  border-radius:8px;margin-top:10px}
+.browse-list .it{display:flex;align-items:center;gap:9px;padding:7px 12px;cursor:pointer;
+  border-bottom:1px solid #20242e;font-size:13px}
+.browse-list .it:hover{background:var(--panel2)}
+.browse-list .it.media:hover{background:#20304f}
+.browse-list .it .sz{margin-left:auto;color:var(--dim);font-size:11.5px}
+.crumb{display:flex;gap:6px;flex-wrap:wrap;font-size:12px;color:var(--dim);margin-top:10px}
+.crumb span{cursor:pointer}
+.crumb span:hover{color:var(--accent)}
+
+/* 提示条 */
+#toast{position:fixed;right:20px;bottom:20px;z-index:99;display:flex;flex-direction:column;gap:8px}
+.toast{background:var(--panel2);border:1px solid var(--border);border-left:3px solid var(--accent);
+  border-radius:8px;padding:10px 16px;font-size:13px;max-width:420px;
+  box-shadow:0 4px 18px rgba(0,0,0,.5);animation:slidein .25s}
+.toast.err{border-left-color:var(--err)}
+.toast.ok{border-left-color:var(--ok)}
+@keyframes slidein{from{transform:translateX(30px);opacity:0}}
+
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 18px;font-size:13px}
+.kv .k{color:var(--dim);white-space:nowrap}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.mt{margin-top:14px}
+textarea{resize:vertical;min-height:52px;line-height:1.5}
+.src-text{color:var(--dim);font-size:12.5px;max-width:340px;line-height:1.45}
+.num{font-family:var(--mono);white-space:nowrap}
+.filterbar{display:flex;align-items:center;gap:14px;margin-bottom:10px;font-size:12.5px;color:var(--dim)}
+.empty{color:var(--dim);padding:26px;text-align:center;border:1px dashed var(--border);border-radius:8px}
+.outfile{display:flex;align-items:center;gap:12px;padding:9px 4px;border-bottom:1px solid #20242e;font-size:13px}
+.outfile:last-child{border-bottom:none}
+.outfile .grow{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 质检结果行（I-2） */
+.qcrow{display:flex;align-items:flex-start;gap:12px;padding:8px 4px;border-bottom:1px solid #20242e;font-size:13px}
+.qcrow:last-child{border-bottom:none}
+.qcrow .qc-name{font-weight:600;min-width:104px;flex-shrink:0}
+.qcrow .qc-detail{flex:1;color:var(--dim);line-height:1.6;word-break:break-all}
+/* R 卡片折叠 */
+[data-collapse] > .toolbar h3{cursor:pointer;user-select:none}
+[data-collapse] > .toolbar h3::before{content:"▾ ";color:var(--dim)}
+[data-collapse].collapsed > .toolbar h3::before{content:"▸ "}
+[data-collapse] > .toolbar{border-bottom:1px solid transparent}
+[data-collapse]:not(.collapsed) > .toolbar{border-bottom-color:var(--border)}
+.src-text{font-size:12.5px;line-height:1.45;white-space:pre-wrap;word-break:break-word}
+table audio{width:215px;height:32px;vertical-align:middle}
+.clip{display:flex;align-items:center;gap:3px}
+.clip audio{flex:1;min-width:150px}
+.clip button{padding:2px 7px;font-size:12px;line-height:1.2;flex:none}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">🎬 影视配音流水线</div>
+  <select id="project_select" title="切换项目"></select>
+  <span id="run_badge" class="badge">未运行</span>
+  <div class="spacer"></div>
+  <button class="btn ghost" id="btn_selftest" title="检查运行环境（ffmpeg / 目录 / 各阶段依赖）">✅ 自检</button>
+      <button class="btn ghost" id="btn_new">＋ 新建项目</button>
+  <button class="btn ghost" id="btn_reload" title="刷新项目列表">⟳</button>
+  <button class="btn ghost" id="lang_toggle" title="Switch language / 切换语言">EN</button>
+</header>
+
+<nav>
+<button data-tab="overview" class="active">概览</button>
+<button data-tab="batch">批量处理</button>
+<button data-tab="config">配置</button>
+  <button data-tab="run">运行</button>
+  <button data-tab="review">人工复核</button>
+  <button data-tab="output">交付物</button>
+</nav>
+
+<main>
+<!-- ============ 概览 ============ -->
+<section class="tab active" id="tab-overview">
+  <div class="grid2">
+    <div class="card">
+      <h3>项目信息</h3>
+      <div class="kv" id="ov_meta"></div>
+      <div class="chips" id="ov_chips"></div>
+      <div class="mt toolbar">
+        <button class="btn" id="ov_run">▶ 跑全流程</button>
+        <button class="btn ghost" id="ov_stop">⏹ 停止</button>
+        <label><input type="checkbox" id="ov_force"> 强制重跑</label>
+      </div>
+      <div class="hint" style="color:var(--dim);font-size:12px">
+        输入未变的阶段会自动跳过（断点续跑）；改动某段配置后只会重算受影响的阶段。
+      </div>
+    </div>
+    <div class="card">
+      <h3>质检卡点（每部片子都要过）</h3>
+      <table>
+        <tr><td>R1</td><td>说话人是否被拆错 <small>→ 复核页 · R1</small></td></tr>
+        <tr><td>R2</td><td>译文准确、长度不超预算 <small>→ 复核页 · R2</small></td></tr>
+        <tr><td>R3</td><td>克隆音色像不像本人 <small>→ 复核页 · R3</small></td></tr>
+        <tr><td>R4</td><td>混音无双重人声、响度合适 <small>→ 复核页 · R4</small></td></tr>
+      </table>
+      <div class="hint" style="color:var(--dim);font-size:12px;margin-top:8px">
+        人工修改一律保存为 <code>*.edited.json</code> 编辑层，脚本永不覆盖。
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="toolbar" style="margin-bottom:10px">
+      <h3 style="margin:0">阶段进度</h3>
+      <div class="spacer"></div>
+      <span id="ov_runinfo" class="badge" style="display:none"></span>
+    </div>
+    <table id="ov_stage_table"></table>
+    <div class="hint" style="color:var(--dim);font-size:12px;margin-top:10px">
+      「日志」查看该阶段完整输出；「从此重跑」从该阶段起跑到底，输入未变的后续阶段自动跳过。
+      状态含义：✔ 完成 / ⏭ 本次跳过（沿用上次结果）/ ▶ 运行中 / ✘ 失败 / ⏸ 上次中断。
+    </div>
+  </div>
+</section>
+
+<!-- ============ 配置 ============ -->
+<section class="tab" id="tab-config">
+  <div class="card">
+    <div class="toolbar" style="margin-bottom:14px">
+      <h3 style="margin:0">项目配置</h3>
+      <div class="spacer"></div>
+      <span id="cfg_backend" class="badge"></span>
+      <span id="cfg_tts_backend" class="badge"></span>
+      <button class="btn" id="cfg_save">💾 保存配置</button>
+    </div>
+
+    <!-- 全局最常用选项置顶（2026-10-20）：单主播判断影响 s04 分离与 s07 克隆策略 -->
+    <fieldset>
+      <legend><span class="stage-tag">s04</span><span class="stage-tag">s07</span>单主播判断 —— 改后从 s04 起重算</legend>
+      <div class="field">
+        <label class="label">是否单一主播</label>
+        <select data-cfg="single_speaker">
+          <option value="auto">自动判断（推荐）</option>
+          <option value="on">强制单人</option>
+          <option value="off">强制多人（完整分离）</option>
+        </select>
+        <div class="hint">自动：先用 wespeaker 声纹预判，全片一人就跳过 pyannote（省约 4GB 显存与数分钟），多人则走完整分离——单人片无需每次手动勾选。强制单人：口播/讲师/独白类素材直接跳过全部分离；拿不准或多人片用「自动」</div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend><span class="stage-tag">s01</span><span class="stage-tag">s10</span>音频规格 —— 改后全链路重算</legend>
+      <div class="row">
+        <div class="field"><label class="label">母带采样率（Hz）</label>
+          <input type="number" data-cfg="audio.master_sample_rate">
+          <div class="hint">s01 拆音轨与 s10 装配成片共用的音频基准</div></div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend><span class="stage-tag">s02</span>对白 / 背景分离 —— 改后从 s02 起重算</legend>
+      <div class="row">
+        <div class="field"><label class="label">分离模型</label>
+          <select data-cfg="separation.model"><option>htdemucs_ft</option><option>htdemucs</option></select></div>
+        <div class="field"><label class="label">设备</label>
+          <select data-cfg="separation.device"><option>cuda</option><option>cpu</option></select></div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend><span class="stage-tag">s03</span>降噪（可选，默认关闭）—— 改后从 s03 起重算</legend>
+      <div class="field">
+        <label style="color:var(--dim);font-size:12.5px"><input type="checkbox" data-cfg="denoise.enabled"> 启用 DeepFilterNet 降噪去混响</label>
+        <div class="hint">无论开关，s03 都会产出 vocals_clean.wav，下游只认这一个文件</div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend><span class="stage-tag">s04</span>识别与说话人 —— 改后从 s04 起重算</legend>
+      <div class="row">
+        <div class="field"><label class="label">ASR 模型</label>
+          <select data-cfg="asr.model"><option>large-v3</option><option>large-v2</option><option>medium</option><option>small</option></select></div>
+        <div class="field"><label class="label">量化精度</label>
+          <select data-cfg="asr.compute_type"><option>int8</option><option>int8_float16</option><option>float16</option></select></div>
+        <div class="field"><label class="label">设备</label>
+          <select data-cfg="asr.device"><option>cuda</option><option>cpu</option></select></div>
+        <div class="field"><label class="label">批大小</label><input type="number" data-cfg="asr.batch_size"></div>
+        <div class="field"><label class="label">ASR 采样率（Hz）</label><input type="number" data-cfg="audio.asr_sample_rate"></div>
+      </div>
+      <div class="field"><label class="label">说话人分离方式</label>
+        <div class="radios" id="dia_method">
+          <label class="radio-card"><input type="radio" name="dia_method" data-cfg="diarization.method" value="auto">
+            <span><span class="t">auto（推荐）</span><br><span class="d">有 Token 走官方 pyannote → 无 Token 用魔搭本地版 → 再退声纹聚类</span></span></label>
+          <label class="radio-card"><input type="radio" name="dia_method" data-cfg="diarization.method" value="pyannote">
+            <span><span class="t">pyannote</span><br><span class="d">Token 或本地魔搭权重（models/pyannote/，已随包）</span></span></label>
+          <label class="radio-card"><input type="radio" name="dia_method" data-cfg="diarization.method" value="embedding">
+            <span><span class="t">embedding</span><br><span class="d">本地声纹聚类，完全离线</span></span></label>
+          <label class="radio-card"><input type="radio" name="dia_method" data-cfg="diarization.method" value="none">
+            <span><span class="t">none</span><br><span class="d">单人影片：全部归为 SPK_01</span></span></label>
+        </div>
+      </div>
+      <div class="row">
+        <div class="field"><label class="label">HuggingFace Token（可选）</label>
+          <input type="password" data-cfg="diarization.token" data-nullable="1" placeholder="hf_..." autocomplete="off">
+          <div class="hint">不填也能跑：默认用随包的魔搭本地版 pyannote（完全离线）。
+            填 Token 切换官方门控权重（3.1 完整版，需先在 huggingface.co 接受模型条款）</div></div>
+        <div class="field"><label class="label">聚类阈值</label><input type="number" step="0.05" data-cfg="diarization.clustering_threshold"></div>
+        <div class="field"><label class="label">最少说话人数</label><input type="number" data-cfg="diarization.min_speakers" data-nullable="1" placeholder="留空自动"></div>
+        <div class="field"><label class="label">最多说话人数</label><input type="number" data-cfg="diarization.max_speakers" data-nullable="1" placeholder="留空自动"></div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend><span class="stage-tag">s05</span>翻译（本地 / API）—— 改后从 s05 起重算</legend>
+      <div class="row" style="margin-bottom:12px">
+        <div class="field"><label class="label">源语言</label>
+          <select data-cfg="source_lang"><option value="en">en 英语</option><option value="zh">zh 中文</option></select>
+          <div class="hint">s04 识别也用它</div></div>
+        <div class="field"><label class="label">目标语言</label>
+          <select data-cfg="target_lang"><option value="zh">zh 中文</option><option value="en">en 英语</option><option value="ja">ja 日语</option><option value="yue">yue 粤语</option></select>
+          <div class="hint">s07 配音也用它</div></div>
+      </div>
+      <div class="radios" id="tr_provider" style="margin-bottom:12px">
+        <label class="radio-card"><input type="radio" name="tr_provider" data-cfg="translation.provider" value="local">
+          <span><span class="t">本地 MarianMT</span><br><span class="d">完全离线、免费、无需 Key；质量一般，适合跑通流程</span></span></label>
+        <label class="radio-card"><input type="radio" name="tr_provider" data-cfg="translation.provider" value="deepseek">
+          <span><span class="t">DeepSeek API</span><br><span class="d">推荐。译文质量高、便宜，需要 API Key</span></span></label>
+        <label class="radio-card"><input type="radio" name="tr_provider" data-cfg="translation.provider" value="openai">
+          <span><span class="t">OpenAI API</span><br><span class="d">官方接口，需要 OPENAI 兼容的 Key</span></span></label>
+        <label class="radio-card"><input type="radio" name="tr_provider" data-cfg="translation.provider" value="openai_compatible">
+          <span><span class="t">自定义兼容 API</span><br><span class="d">任何 OpenAI 协议服务（需自填 base_url）</span></span></label>
+      </div>
+      <div class="row" id="tr_api_fields">
+        <div class="field"><label class="label">API Key</label>
+          <input type="password" data-cfg="translation.api_key" data-nullable="1" id="tr_key" placeholder="sk-..." autocomplete="off">
+          <div class="hint">明文存入 project.json；也可留空改用环境变量 DEEPSEEK_API_KEY / OPENAI_API_KEY / DUB_LLM_API_KEY</div>
+        </div>
+        <div class="field"><label class="label">base_url</label>
+          <input type="text" data-cfg="translation.base_url" data-nullable="1" id="tr_url" placeholder="留空用默认">
+          <div class="hint" id="tr_url_hint"></div>
+        </div>
+      </div>
+      <div class="field" style="max-width:320px"><label class="label">模型名</label>
+        <input type="text" data-cfg="translation.model" id="tr_model" placeholder="deepseek-chat">
+      </div>
+      <details>
+        <summary style="cursor:pointer;color:var(--dim);font-size:12.5px">高级参数</summary>
+        <div class="row mt">
+          <div class="field"><label class="label">语速预算（字/秒）</label><input type="number" step="0.1" data-cfg="translation.chars_per_second"></div>
+          <div class="field"><label class="label">长度比上限</label><input type="number" step="0.01" data-cfg="translation.max_length_ratio"></div>
+          <div class="field"><label class="label">批大小</label><input type="number" data-cfg="translation.batch_size"></div>
+          <div class="field"><label class="label">超时（秒）</label><input type="number" data-cfg="translation.timeout"></div>
+        </div>
+        <div class="row">
+          <div class="field"><label style="color:var(--dim);font-size:12.5px"><input type="checkbox" data-cfg="translation.fallback_local"> API 失败 / 未配 Key 时退回本地模型</label></div>
+          <div class="field"><label class="label">本地兜底模型</label><input type="text" data-cfg="translation.local_model"></div>
+        </div>
+      </details>
+    </fieldset>
+
+    <fieldset>
+      <legend><span class="stage-tag">s06</span>音色档案 —— 改后从 s06 起重算</legend>
+      <div class="row">
+        <div class="field"><label class="label">参考音频时长上限（秒）</label>
+          <input type="number" step="0.5" data-cfg="tts.ref_seconds">
+          <div class="hint">从原声对白截取多长的片段给 s06 提音色</div></div>
+        <div class="field"><label class="label">最短参考（秒）</label>
+          <input type="number" step="0.1" data-cfg="tts.min_ref_seconds">
+          <div class="hint">短于此长度的片段不参与克隆</div></div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend><span class="stage-tag">s07</span>克隆配音 —— 改后从 s07 起重算</legend>
+      <div class="row">
+        <div class="field"><label class="label">引擎</label>
+          <select data-cfg="tts.engine" id="tts_engine">
+            <option value="indextts2">IndexTTS-2.5（本机主力）</option>
+            <option value="gpt_sovits">GPT-SoVITS（本机备选）</option>
+            <option value="siliconflow">硅基流动 CosyVoice2（云端备选）</option>
+          </select>
+          <div class="hint">主力 IndexTTS-2.5 效果最稳；GPT-SoVITS 相似度上限更高但要单独部署；
+            云端备选不占显卡、按量计费，适合显卡被占/无卡时应急</div></div>
+        <div class="field" id="tts_device_row"><label class="label">设备</label>
+          <select data-cfg="tts.device"><option>cuda</option><option>cpu</option></select>
+          <div class="hint">云端引擎不占本机设备（合成在硅基流动机房）</div></div>
+        <div class="field"><label class="label">采样率（Hz）</label><input type="number" data-cfg="tts.sample_rate"></div>
+      </div>
+      <div class="field" id="gsv_home_row" style="display:none">
+        <label class="label">GPT-SoVITS 部署路径</label>
+        <input type="text" data-cfg="tts.gpt_sovits_home" placeholder="D:\GPT-SoVITS">
+        <div class="hint">GPT-SoVITS 的安装根目录（含 GPT_SoVITS/ 代码与 venv/）；s07 会自动转交它的 venv 执行</div>
+      </div>
+      <div class="field" id="sf_key_row" style="display:none">
+        <label class="label">硅基流动 API Key</label>
+        <input type="password" data-cfg="tts.siliconflow.api_key" id="sf_api_key" placeholder="留空则复用翻译阶段的 Key（或环境变量 SILICONFLOW_API_KEY）">
+        <div class="hint">云端备选（2026-10-21 实测通过）：不占本机显存、按量计费（约 ¥1.5–3/万汉字），
+          但参考音频会上传云端（隐私自酌）。先用下方按钮测通再跑——本机引擎优先，仅在显卡被占/无卡时使用</div>
+        <div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <button class="btn" id="sf_test_btn">🔌 测试连通性</button>
+          <span id="sf_test_result" class="hint" style="margin:0"></span>
+        </div>
+        <div id="sf_test_audio" style="display:none;margin-top:8px">
+          <div class="hint" style="margin-bottom:4px">云端试合成样音（项目音色念「测试」）：</div>
+          <audio id="sf_test_player" controls style="width:100%;max-width:420px"></audio>
+        </div>
+      </div>
+      <div class="field" id="emo_mode_row"><label class="label">语气模式</label>
+        <div class="radios" id="emo_mode" style="grid-template-columns:1fr 1fr">
+          <label class="radio-card"><input type="radio" name="emo_mode" data-cfg="tts.emo_mode" value="ref">
+            <span><span class="t">跟随参考音频</span><br><span class="d">语气取自原声对白片段；英音参考念中文可能生硬</span></span></label>
+          <label class="radio-card"><input type="radio" name="emo_mode" data-cfg="tts.emo_mode" value="text">
+            <span><span class="t">文本智能分析</span><br><span class="d">QwenEmotion 从译文台词分析情感引导语气；音色仍是原演员，情感更浓，部分影片可能过烈</span></span></label>
+        </div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <div class="field"><label class="label">语速提升（1.0 = 默认朗读速度）</label>
+          <input type="number" step="0.05" min="1" max="1.5" data-cfg="tts.tempo_boost">
+          <div class="hint">合成时原生提速，无变速失真。电影对白约 5.5 字/秒，
+            默认朗读腔约 4 字/秒；建议 1.10–1.20。译文短于原声时尾部自然留白作句间间隔</div></div>
+      </div>
+      <div class="hint" style="color:var(--warn);font-size:12px;margin-top:8px">
+        CPU 模式合成很慢（约 25 倍实时）；有显卡请选 cuda 并关闭占显存的程序。
+        文本分析模式每段多一次轻量推理（1–2 秒），语气更戏剧化，觉得过烈就切回跟随参考音频。
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend><span class="stage-tag">s08</span>时间对齐 —— 改后从 s08 起重算</legend>
+      <div class="row">
+        <div class="field"><label class="label">变速上限</label><input type="number" step="0.01" data-cfg="align.max_speed"></div>
+        <div class="field"><label class="label">可借用间隙（秒）</label><input type="number" step="0.05" data-cfg="align.max_gap_borrow"></div>
+      </div>
+      <div class="hint">只加速不放慢：配音短于时间窗时保持合成语速，尾部留白自然成为句间间隔；
+        超窗时按变速上限加速，仍超则标 overrun 提示回译精简。</div>
+    </fieldset>
+
+    <fieldset>
+      <legend><span class="stage-tag">s09</span>混音 —— 改后从 s09 起重算</legend>
+      <div class="row">
+        <div class="field"><label class="label">背景增益 dB</label><input type="number" step="0.5" data-cfg="mix.background_gain_db"></div>
+        <div class="field"><label class="label">闪避深度 dB</label><input type="number" step="0.5" data-cfg="mix.duck_db"></div>
+        <div class="field"><label class="label">目标响度 LUFS</label><input type="number" step="0.5" data-cfg="mix.target_lufs"></div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend><span class="stage-tag">s10</span>字幕装配 —— 改后从 s10 起重算</legend>
+      <div class="field">
+        <label style="color:var(--dim);font-size:12.5px"><input type="checkbox" data-cfg="subtitle.burn_in"> 把中文字幕烧录进画面</label>
+        <div class="hint">默认关：只生成 .srt 字幕文件（成片视频流直接拷贝，秒级完成）。
+          开启后视频需重编码，耗时显著增加；适合直接发平台的场景。
+          源视频自带内封字幕流时会在日志提示（不继承原字幕）；源画面底部已有硬字幕（如已翻译过的视频）时，烧录会双层叠加，建议保持关闭。</div>
+      </div>
+      <div class="row">
+        <div class="field"><label class="label">字体</label>
+          <input type="text" data-cfg="subtitle.font"></div>
+        <div class="field"><label class="label">字号</label>
+          <input type="number" data-cfg="subtitle.font_size"></div>
+        <div class="field"><label class="label">底边距（px）</label>
+          <input type="number" data-cfg="subtitle.margin_v"></div>
+      </div>
+    </fieldset>
+    <div class="hint" style="color:var(--dim);font-size:12px">
+      配置区块按流水线阶段 s01→s10 排列，改哪块就从对应阶段起重算。
+      注意：译文或语言变化会让 s07 配音重新合成（耗时最长）；tts 参数由 s06/s07 共享，
+      改其中任一项会两个一起失效。确认满意再保存。
+    </div>
+  </div>
+</section>
+
+<!-- ============ 批量 ============ -->
+<section class="tab" id="tab-batch">
+  <div class="card">
+    <div class="toolbar">
+      <h3 style="margin:0">批量转换</h3>
+      <div class="spacer"></div>
+      <span id="batch_state" class="badge"></span>
+    </div>
+    <div class="toolbar" style="flex-wrap:wrap">
+      <input type="text" id="batch_src" placeholder="视频文件夹（递归扫描全部 mp4/mkv/mov…，短的先跑）" style="flex:1;min-width:280px">
+      <select id="batch_inherit" style="width:250px" title="翻译设置继承：批量里每个视频都用这套翻译配置"></select>
+      <input type="number" id="batch_boost" value="1.15" step="0.05" min="1" max="1.5" style="width:88px" title="语速提升系数">
+      <button class="btn" id="btn_batch_start">▶ 开始批量</button>
+      <button class="btn danger" id="btn_batch_stop">⏹ 停止</button>
+    </div>
+    <div class="hint" style="color:var(--dim);font-size:12px;margin-bottom:12px">
+      每个视频自动建项目 → 全流程 → 质检，输出到项目目录（下拉框选项目可看详情）。
+      「继承」选一个配好翻译的项目（如硅基流动 Key），批量里所有视频沿用它的翻译设置；
+      语速提升建议 1.10–1.20，讲师语速快的视频可到 1.25。
+      同一时间只能跑一个任务：批量与单项目流水线互斥。
+    </div>
+    <div id="batch_info" class="badge run" style="display:none;margin-bottom:10px"></div>
+    <h3 style="font-size:14px">进度</h3>
+    <div id="batch_progress"><div class="empty">尚无批量记录</div></div>
+    <h3 style="font-size:14px;margin-top:14px">控制台 <small>（每行带时间戳）</small></h3>
+    <pre id="batch_console" style="max-height:280px">（尚未运行）</pre>
+  </div>
+</section>
+
+<!-- ============ 运行 ============ -->
+<section class="tab" id="tab-run">
+  <div class="card">
+    <div class="toolbar">
+      <h3 style="margin:0">运行控制</h3>
+      <div class="spacer"></div>
+      <span id="run_state" class="badge"></span>
+    </div>
+    <div class="toolbar">
+      <label><input type="radio" name="run_mode" value="all" checked> 全流程</label>
+      <label><input type="radio" name="run_mode" value="from"> 从某阶段起</label>
+      <label><input type="radio" name="run_mode" value="only"> 仅某阶段</label>
+      <select id="run_stage" style="width:230px" disabled></select>
+      <input type="text" id="run_seg" placeholder="seg_0001（单段调试，可留空）" style="width:200px">
+      <label><input type="checkbox" id="run_force"> 强制重跑</label>
+      <button class="btn" id="btn_start">▶ 开始</button>
+      <button class="btn danger" id="btn_stop">⏹ 停止</button>
+    </div>
+    <div class="hint" style="color:var(--dim);font-size:12px;margin-bottom:12px">
+      「单段调试」只会真正作用于 s07/s08 等支持 --seg 的阶段，其余阶段自动忽略。
+      同一时间只能跑一条流水线。
+    </div>
+    <div id="run_info" class="badge run" style="display:none;margin-bottom:10px"></div>
+    <h3 style="font-size:14px">控制台 <small>（每行带时间戳）</small></h3>
+    <pre id="console" style="max-height:340px">（尚未运行）</pre>
+    <div class="mt"></div>
+    <div class="toolbar" style="margin-bottom:8px">
+      <h3 style="margin:0;font-size:14px">阶段日志</h3>
+      <select id="log_stage" style="width:230px"></select>
+      <button class="btn ghost small" id="log_refresh">刷新</button>
+    </div>
+    <pre id="log_view" style="max-height:280px">选择阶段查看日志</pre>
+  </div>
+</section>
+
+<!-- ============ 人工复核 ============ -->
+<section class="tab" id="tab-review">
+  <div class="card" data-collapse data-open="0">
+    <div class="toolbar">
+      <h3 style="margin:0">R1 说话人核对</h3>
+      <div class="spacer"></div>
+      <span id="spk_layer" class="badge"></span>
+      <button class="btn ghost small" id="spk_reload">⟳</button>
+      <button class="btn small" id="spk_save">💾 保存编辑层</button>
+    </div>
+    <div id="spk_body"></div>
+    <div class="hint" style="color:var(--dim);font-size:12px">
+      听 <b>试听</b> 判断同一演员是否被拆成多个 SPK；是的话合并 character 名，
+      或增删 ref_segments 里的片段 ID。保存后写入 speakers.edited.json，需从 s06 起重跑生效。
+    </div>
+  </div>
+
+  <div class="card" data-collapse data-open="1">
+    <div class="toolbar">
+      <h3 style="margin:0">R2 译文复核 + R3 克隆试听（原文/译文 × 原声/配音）</h3>
+      <div class="spacer"></div>
+      <span id="tr_layer" class="badge"></span>
+      <label style="font-size:12.5px;color:var(--dim)"><input type="checkbox" id="tr_filter"> 只看需处理</label>
+      <button class="btn ghost small" id="tr_reload">⟳</button>
+      <button class="btn small" id="tr_save">💾 保存编辑层</button>
+    </div>
+    <div id="tr_body"></div>
+    <div class="hint" style="color:var(--dim);font-size:12px">
+      每段四件套：<b>原文文本 → 原声试听</b>（人声轨按时间轴定位）→ <b>译文文本（可编辑）→ 配音试听</b>（对齐后最终音频）。
+      对照听完直接改 target；超预算的段落建议先精简文字。保存后写入 translation.edited.json，需从 s07 起重跑生效。
+    </div>
+  </div>
+
+  <div class="card" data-collapse data-open="1">
+    <div class="toolbar"><h3 style="margin:0">R3 克隆试听（含原文/译文对照）</h3><div class="spacer"></div>
+      <button class="btn ghost small" id="tts_reload">⟳</button></div>
+    <div id="tts_body"></div>
+    <div class="hint" style="color:var(--dim);font-size:12px">
+      配音列优先播 <b>07_align</b> 对齐后的最终音频（即成片实际听到的），无对齐结果时回退 06_tts 合成音频；
+      对照「原声试听」人声轨可判断音色相似度与语速自然度，语速列 >8.5 字/秒（红）建议精简译文。
+    </div>
+  </div>
+
+  <div class="card" data-collapse data-open="0">
+    <div class="toolbar"><h3 style="margin:0">R4 混音试听</h3></div>
+    <div id="mix_body"></div>
+  </div>
+</section>
+
+<!-- ============ 交付物 ============ -->
+<section class="tab" id="tab-output">
+  <div class="card">
+    <div class="toolbar"><h3 style="margin:0">交付物（09_output）</h3><div class="spacer"></div>
+      <button class="btn ghost small" id="out_reload">⟳</button>
+      <button class="btn small" id="out_qc_btn">🔍 质检</button></div>
+    <div id="out_list"></div>
+    <div id="out_media" class="mt"></div>
+    <div id="out_qc" class="mt"></div>
+  </div>
+</section>
+</main>
+
+<!-- ============ 环境自检 ============ -->
+<div class="modal-mask" id="m_selftest">
+  <div class="modal" style="max-width:660px">
+    <div class="hd"><b>环境自检</b><button class="btn ghost small" data-close="1">✕</button></div>
+    <div class="bd">
+      <div class="hint" style="margin-bottom:10px">检查 Python / ffmpeg / 目录结构 / 各阶段依赖是否就位，全程无网络请求。换新机器后先跑一遍。</div>
+      <div id="st_status" class="badge" style="display:none;margin-bottom:10px"></div>
+      <pre id="st_log" style="font-size:12.5px;line-height:1.7;max-height:52vh;overflow:auto;white-space:pre-wrap;background:rgba(0,0,0,.28);padding:12px;border-radius:8px;border:1px solid var(--border);margin:0"></pre>
+    </div>
+    <div class="ft">
+      <button class="btn ghost" data-close="1">关闭</button>
+      <button class="btn" id="st_run">开始自检</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 新建项目 ============ -->
+<div class="modal-mask" id="m_new">
+  <div class="modal">
+    <div class="hd"><b>新建项目：选一部影片来跑</b><button class="btn ghost small" data-close="1">✕</button></div>
+    <div class="bd">
+      <div class="field"><label class="label">项目 ID</label>
+        <input type="text" id="np_id" placeholder="20261010_my_clip">
+        <div class="hint">建议「日期_片段名」；1–64 字符，不含 \ / : * ? " &lt; &gt; |</div></div>
+      <div class="field"><label class="label">源视频路径</label>
+        <div class="row">
+          <input type="text" id="np_src" placeholder="D:\movies\clip.mp4" style="flex:1">
+          <button class="btn ghost" id="np_browse" style="white-space:nowrap">浏览…</button>
+        </div>
+        <div class="hint">文件会被复制到项目的 00_source/ 目录（大文件需要一些时间）</div></div>
+      <div class="row">
+        <div class="field"><label class="label">翻译设置</label>
+          <select id="np_inherit"></select>
+          <div class="hint">直接沿用某个旧项目的翻译后端与 Key（推荐选已配好的）</div></div>
+        <div class="field"><label class="label">运行设备</label>
+          <div class="radios" id="np_device" style="grid-template-columns:1fr 1fr">
+            <label class="radio-card"><input type="radio" name="np_device" value="cpu" checked>
+              <span><span class="t">CPU（稳妥）</span><br><span class="d">无需腾显存，但 TTS 慢约 25 倍</span></span></label>
+            <label class="radio-card"><input type="radio" name="np_device" value="cuda">
+              <span><span class="t">GPU（快）</span><br><span class="d">需先退出占显存的程序（如 ComfyUI）</span></span></label>
+          </div>
+        </div>
+      </div>
+      <div class="field">
+        <label style="color:var(--dim);font-size:12.5px"><input type="checkbox" id="np_solo"> <b>单主播模式</b>：全片只有一个说话人</label>
+        <div class="hint">口播 / 讲师 / 独白类素材勾选：跳过说话人分离（省约 4GB 显存与数分钟），克隆一次全程复用；多人影片别勾</div>
+      </div>
+      <div id="np_err" style="color:var(--err);font-size:12.5px"></div>
+    </div>
+    <div class="ft">
+      <button class="btn ghost" data-close="1">取消</button>
+      <button class="btn" id="np_create">创建</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 文件浏览 ============ -->
+<div class="modal-mask" id="m_browse">
+  <div class="modal">
+    <div class="hd"><b>选择源文件</b><button class="btn ghost small" data-close="1">✕</button></div>
+    <div class="bd">
+      <div class="crumb" id="br_crumb"></div>
+      <div class="browse-list" id="br_list"></div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+
+const STAGE_INFO = {
+  s01_extract_audio: ["s01 拆音轨", "ffmpeg 提取音轨"],
+  s02_separate:      ["s02 人声分离", "Demucs 分出对白/背景"],
+  s03_denoise:       ["s03 降噪", "DeepFilterNet（可选）"],
+  s04_asr:           ["s04 识别+说话人", "WhisperX + 声纹"],
+  s05_translate:     ["s05 翻译", "本地 / API"],
+  s06_voice_profile: ["s06 音色档案", "剪辑参考音频"],
+  s07_tts:           ["s07 克隆配音", "IndexTTS-2.5"],
+  s08_align:         ["s08 时长对齐", "变速不变调"],
+  s09_mix:           ["s09 混音", "闪避 + 响度归一"],
+  s10_assemble:      ["s10 装配", "成片 + 字幕"],
+};
+const STAGES = Object.keys(STAGE_INFO);
+
+let cur = localStorage.getItem("dub_cur") || "";
+let curData = null;
+let activeTab = "overview";
+let editing = {};  // 复核页在内存中的编辑结果
+
+/* ---------------- 基础工具 ---------------- */
+function esc(s){ return String(s ?? "").replace(/[&<>"']/g,
+  c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])) }
+function toast(msg, kind="info"){
+  const el = document.createElement("div");
+  el.className = "toast" + (kind==="err"?" err":kind==="ok"?" ok":"");
+  el.textContent = msg;
+  $("#toast").appendChild(el);
+  setTimeout(()=>el.remove(), 4200);
+}
+async function api(path, opts={}){
+  const r = await fetch(path, {headers:{"Content-Type":"application/json"}, ...opts});
+  let data = {};
+  try{ data = await r.json() }catch(_){}
+  if(!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+  return data;
+}
+const projApi = (sub="") => `/api/project/${encodeURIComponent(cur)}${sub}`;
+function fmtSize(n){
+  if(n > 1<<30) return (n/(1<<30)).toFixed(2)+" GB";
+  if(n > 1<<20) return (n/(1<<20)).toFixed(1)+" MB";
+  if(n > 1024)  return (n/1024).toFixed(0)+" KB";
+  return n+" B";
+}
+function fmtTime(iso){
+  if(!iso) return "—";
+  return iso.replace(/^(\d{4})-(\d{2})-(\d{2})T/, "$2-$3 ");
+}
+function fmtDur(sec){
+  if(sec == null) return "—";
+  if(sec < 60) return Math.round(sec) + "s";
+  const m = Math.floor(sec/60), s = Math.round(sec%60);
+  return m + "m" + String(s).padStart(2,"0") + "s";
+}
+function fmtClock(ts){
+  const d = new Date(ts), p = n => String(n).padStart(2,"0");
+  return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+function audioUrl(rel){ return projApi("/audio/" + rel.split("/").map(encodeURIComponent).join("/")); }
+
+/* ---------------- 项目切换 ---------------- */
+async function loadProjects(keepCur=true){
+  const d = await api("/api/projects");
+  const sel = $("#project_select");
+  sel.innerHTML = d.projects.map(p =>
+    `<option value="${esc(p.id)}">${esc(p.id)}</option>`).join("");
+  if(!keepCur || !d.projects.some(p=>p.id===cur))
+    cur = d.projects.length ? d.projects[d.projects.length-1].id : "";
+  if(cur) sel.value = cur;
+  localStorage.setItem("dub_cur", cur);
+  if(cur) loadProject(); else $("#run_badge").textContent = "无项目";
+}
+async function loadProject(){
+  if(!cur) return;
+  stopQcPoll();  // 切项目停掉上一个项目的质检轮询
+  curData = await api(projApi());
+  editing = {};
+  renderAll();
+}
+function renderAll(){
+  renderBadge();
+  renderOverview();
+  renderConfig();
+  if(activeTab === "review") loadReview();
+  if(activeTab === "output") loadOutput();
+}
+function renderBadge(){
+  const b = $("#run_badge"), run = curData?.run;
+  if(!run){ b.className="badge"; b.textContent="未运行"; return }
+  if(run.running){
+    b.className="badge run";
+    b.innerHTML = `<span class="dot"></span> 运行中 ${fmtDur(run.elapsed)}`;
+  }
+  else if(run.exit_code === 0){ b.className="badge ok"; b.textContent = "✔ 上次运行成功"; }
+  else if(run.exit_code === "stopped"){ b.className="badge warn"; b.textContent = "已手动停止"; }
+  else if(run.exit_code != null){ b.className="badge err"; b.textContent = `✘ 失败（退出码 ${run.exit_code}）`; }
+  else { b.className="badge"; b.textContent="未运行"; }
+  const rs = $("#run_state");
+  rs.textContent = b.textContent; rs.className = "badge " + b.className.split(" ")[1];
+  // 运行信息横幅（概览 + 运行页共用）
+  const ri = $("#run_info");
+  if(run.running){
+    const curStage = (curData?.stage_rows || []).find(r => r.status === "running");
+    ri.style.display = "";
+    ri.className = "badge run";
+    ri.textContent = `开始于 ${fmtClock(run.started_at*1000)} · 已运行 ${fmtDur(run.elapsed)}`
+      + (curStage ? ` · 当前 ${STAGE_INFO[curStage.id]?.[0] || curStage.id}` : "")
+      + (run.args?.length ? ` · ${run.args.join(" ")}` : "");
+  } else ri.style.display = "none";
+  const ori = $("#ov_runinfo");
+  if(run.running){
+    ori.style.display = "";
+    ori.className = "badge run";
+    ori.textContent = ri.textContent;
+  } else ori.style.display = "none";
+}
+
+/* ---------------- 概览 ---------------- */
+const STAGE_STATUS = {
+  done:       ["ok",  "✔ 完成"],
+  running:    ["run", "▶ 运行中"],
+  failed:     ["err", "✘ 失败"],
+  skipped:    ["",    "⏭ 跳过"],
+  interrupted:["warn","⏸ 中断"],
+  partial:    ["warn","◐ 部分重做"],
+  pending:    ["",    "—"],
+};
+function renderOverview(){
+  const p = curData?.project || {};
+  $("#ov_meta").innerHTML = `
+    <span class="k">源文件</span><span class="mono">${esc(p.source_file||"—")}</span>
+    <span class="k">创建时间</span><span>${esc(p.created||"—")}</span>
+    <span class="k">项目目录</span><span class="mono">projects/${esc(cur)}/</span>`;
+  const b = curData?.backend || {};
+  const cfg = curData?.config || {};
+  const chip = (label, val, warn) =>
+    `<span class="badge ${warn?"warn":""}">${label}：${esc(val)}</span>`;
+  $("#ov_chips").innerHTML =
+    chip("翻译", b.label||"—", b.backend==="local-fallback"||b.backend==="missing") +
+    chip("TTS", cfg.tts?.engine + " / " + cfg.tts?.device, cfg.tts?.device==="cpu") +
+    chip("ASR", cfg.asr?.model + " / " + cfg.asr?.device) +
+    chip("说话人", cfg.diarization?.method||"—");
+
+  const rows = curData?.stage_rows || [];
+  const running = !!curData?.run?.running;
+  const byId = Object.fromEntries(rows.map(r => [r.id, r]));
+  $("#ov_stage_table").innerHTML =
+    `<tr><th>阶段</th><th>说明</th><th>状态</th><th>开始时间</th><th>结束时间</th><th>耗时</th><th style="width:172px">操作</th></tr>` +
+    STAGES.map(s => {
+      const r = byId[s] || {id:s, status:"pending"};
+      const [cls, label] = STAGE_STATUS[r.status] || ["", esc(r.status)];
+      const hl = r.status === "running" ? ' style="background:#20304f"' : "";
+      const dur = r.status === "running" ? fmtDur(r.elapsed) : fmtDur(r.duration);
+      const msg = r.status === "failed" && r.message
+        ? `<div style="color:var(--err);font-size:11px;max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.message)}">${esc(r.message)}</div>`
+        : "";
+      return `<tr${hl}>
+        <td style="white-space:nowrap"><b>${STAGE_INFO[s][0]}</b></td>
+        <td><span class="dim">${STAGE_INFO[s][1]}</span></td>
+        <td><span class="badge ${cls}">${label}</span>${msg}</td>
+        <td class="num">${fmtTime(r.started)}</td>
+        <td class="num">${fmtTime(r.finished)}</td>
+        <td class="num">${dur}</td>
+        <td style="white-space:nowrap">
+          <button class="btn ghost small" data-act="log" data-stage="${s}" ${r.has_log?"":"disabled"}>日志</button>
+          <button class="btn ghost small" data-act="rerun" data-stage="${s}" ${running?"disabled":""}>从此重跑</button>
+        </td>
+      </tr>`;
+    }).join("");
+  $$("#ov_stage_table [data-act]").forEach(btn => btn.onclick = () => {
+    if(btn.dataset.act === "log"){
+      switchTab("run");
+      $("#log_stage").value = btn.dataset.stage;
+      loadLog();
+    }else{
+      startRun({mode:"from", stage:btn.dataset.stage});
+    }
+  });
+}
+$("#ov_run").onclick = () => startRun({mode:"all", force:$("#ov_force").checked});
+$("#ov_stop").onclick = () => stopRun();
+
+/* ---------------- 配置 ---------------- */
+function getVal(obj, path){
+  return path.split(".").reduce((o,k)=> (o==null?undefined:o[k]), obj);
+}
+function setVal(obj, path, v){
+  const ks = path.split(".");
+  let o = obj;
+  for(const k of ks.slice(0,-1)){ o[k] = (o[k] && typeof o[k]==="object") ? o[k] : {}; o = o[k]; }
+  o[ks[ks.length-1]] = v;
+}
+function renderConfig(){
+  const cfg = curData?.config; if(!cfg) return;
+  $$("[data-cfg]").forEach(el => {
+    let v = getVal(cfg, el.dataset.cfg);
+    // single_speaker 三态归一化：老项目存的是布尔值
+    if(el.dataset.cfg === "single_speaker"){
+      v = (v === true) ? "on" : (v === false) ? "off" : (v == null ? "auto" : v);
+    }
+    if(el.type === "radio"){ el.checked = (v === el.value); }
+    else if(el.type === "checkbox"){ el.checked = !!v; }
+    else { el.value = (v == null ? "" : v); }
+  });
+  syncProviderUI();
+  syncTtsEngineUI();
+  renderBackendBadge();
+}
+function syncTtsEngineUI(){
+  const engine = $("#tts_engine")?.value || "indextts2";
+  const isGsv = engine === "gpt_sovits";
+  const isSf = engine === "siliconflow";
+  const emo = $("#emo_mode_row"); if(emo) emo.style.display = (isGsv || isSf) ? "none" : "";
+  const home = $("#gsv_home_row"); if(home) home.style.display = isGsv ? "" : "none";
+  const key = $("#sf_key_row"); if(key) key.style.display = isSf ? "" : "none";
+  // 云端引擎合成在远端机房，本机设备选项无意义（s07 内部也会强制跳过显存探测）
+  const dev = $("#tts_device_row"); if(dev) dev.style.display = isSf ? "none" : "";
+  const out = $("#sf_test_result"); if(out) out.textContent = "";
+}
+$("#tts_engine")?.addEventListener("change", syncTtsEngineUI);
+function collectConfig(){
+  const cfg = {};
+  $$("[data-cfg]").forEach(el => {
+    const p = el.dataset.cfg;
+    if(el.type === "radio"){ if(el.checked) setVal(cfg, p, el.value); return; }
+    if(el.type === "checkbox"){ setVal(cfg, p, el.checked); return; }
+    let v = el.value;
+    if(el.type === "number"){
+      if(v === "") v = el.dataset.nullable ? null : 0;
+      else v = parseFloat(v);
+    }
+    if(el.dataset.nullable && (el.type==="password"||el.type==="text") && v === "") v = null;
+    setVal(cfg, p, v);
+  });
+  return cfg;
+}
+function syncProviderUI(){
+  const provider = document.querySelector('input[name="tr_provider"]:checked')?.value;
+  const api = provider !== "local";
+  $("#tr_api_fields").style.display = api ? "" : "none";
+  $("#tr_model").closest(".field").style.display = api ? "" : "none";
+  const defaults = {deepseek:"https://api.deepseek.com/v1", openai:"https://api.openai.com/v1", openai_compatible:""};
+  $("#tr_url").placeholder = provider === "openai_compatible" ? "必填，如 https://xxx/v1" : "留空用默认";
+  $("#tr_url_hint").textContent = provider==="openai_compatible" ? "自定义服务必须填写" : `默认 ${defaults[provider]||""}`;
+  $("#tr_model").placeholder = {deepseek:"deepseek-chat", openai:"gpt-4o-mini", openai_compatible:"服务方模型名"}[provider]||"";
+  $$("#tr_provider .radio-card").forEach(c => c.classList.toggle("checked",
+    c.querySelector("input").checked));
+  $$("#dia_method .radio-card").forEach(c => c.classList.toggle("checked",
+    c.querySelector("input").checked));
+  $$("#emo_mode .radio-card").forEach(c => c.classList.toggle("checked",
+    c.querySelector("input").checked));
+}
+function renderBackendBadge(){
+  const b = curData?.backend;
+  if(b){
+    const warn = b.backend === "local-fallback" || b.backend === "missing";
+    $("#cfg_backend").className = "badge " + (warn ? "warn" : b.backend==="api" ? "ok" : "");
+    $("#cfg_backend").textContent = "翻译：" + b.label;
+  }
+  const t = curData?.tts_backend;
+  if(t){
+    const warn = t.backend === "missing";
+    $("#cfg_tts_backend").className = "badge " + (warn ? "warn" : t.backend==="cloud" ? "ok" : "");
+    $("#cfg_tts_backend").textContent = "TTS：" + t.label;
+  }
+}
+document.addEventListener("change", e => {
+  if(e.target.closest("#tr_provider") || e.target.closest("#dia_method")
+     || e.target.closest("#emo_mode")) syncProviderUI();
+});
+$("#cfg_save").onclick = async () => {
+  try{
+    const d = await api(projApi("/config"), {method:"POST", body:JSON.stringify({config:collectConfig()})});
+    curData.config = d.config; curData.backend = d.backend; curData.tts_backend = d.tts_backend;
+    renderBackendBadge(); renderOverview();
+    toast("配置已保存；受影响阶段将在下次运行时自动重算", "ok");
+  }catch(e){ toast(e.message, "err") }
+};
+/* 硅基流动云端备选：连通性测试（验 Key + 端到端小样合成，费用可忽略） */
+$("#sf_test_btn")?.addEventListener("click", async () => {
+  const btn = $("#sf_test_btn"), out = $("#sf_test_result");
+  if(!btn || !out) return;
+  const key = $("#sf_api_key")?.value || "";
+  btn.disabled = true;
+  out.style.color = "var(--dim)";
+  out.textContent = "测试中（首次建音色约需 10 秒）…";
+  try{
+    const d = await api(projApi("/tts_test"), {method:"POST",
+      body:JSON.stringify({engine:"siliconflow", api_key:key})});
+    if(d.ok){
+      out.style.color = "var(--ok)";
+      out.textContent = "✔ " + (d.message || "Key 可用");
+      if(d.audio){
+        const p = $("#sf_test_player");
+        if(p){ p.src = d.audio; $("#sf_test_audio").style.display = ""; }
+      }
+    }else{
+      out.style.color = "var(--err)";
+      out.textContent = "✘ " + (d.error || "测试失败");
+    }
+  }catch(e){
+    out.style.color = "var(--err)";
+    out.textContent = "✘ " + e.message;
+  }
+  btn.disabled = false;
+});
+
+/* ---------------- 运行 ---------------- */
+const runStageSel = $("#run_stage"), logStageSel = $("#log_stage");
+STAGES.forEach(s => {
+  runStageSel.insertAdjacentHTML("beforeend", `<option value="${s}">${STAGE_INFO[s][0]}</option>`);
+  logStageSel.insertAdjacentHTML("beforeend", `<option value="${s}">${STAGE_INFO[s][0]}</option>`);
+});
+$$('#tab-run input[name="run_mode"]').forEach(r => r.onchange = () => {
+  runStageSel.disabled = document.querySelector('#tab-run input[name="run_mode"]:checked').value === "all";
+});
+async function startRun(opts){
+  if(!cur) return toast("先选择或新建项目", "err");
+  const mode = opts.mode || document.querySelector('#tab-run input[name="run_mode"]:checked').value;
+  const body = {
+    mode,
+    stage: mode === "all" ? undefined : runStageSel.value,
+    force: opts.force ?? $("#run_force").checked,
+    seg: opts.seg || $("#run_seg").value.trim(),
+  };
+  try{
+    await api(projApi("/run"), {method:"POST", body:JSON.stringify(body)});
+    toast("流水线已启动", "ok");
+    $("#console").textContent = "";
+    switchTab("run");
+    pollNow();
+  }catch(e){ toast(e.message, "err") }
+}
+async function stopRun(){
+  if(!confirm("确定停止当前流水线？将强制结束所有子进程。")) return;
+  try{ await api(projApi("/stop"), {method:"POST", body:"{}"}); toast("已发送停止指令", "ok") }
+  catch(e){ toast(e.message, "err") }
+}
+$("#btn_start").onclick = () => startRun({});
+$("#btn_stop").onclick = stopRun;
+$("#log_refresh").onclick = loadLog;
+logStageSel.onchange = loadLog;
+
+let consoleStick = true;
+$("#console").addEventListener("scroll", e => {
+  consoleStick = e.target.scrollTop + e.target.clientHeight >= e.target.scrollHeight - 30;
+});
+async function pollConsole(){
+  if(!cur) return;
+  try{
+    const c = await api(projApi("/console"));
+    const el = $("#console");
+    if(c.tail){ el.textContent = c.tail; if(consoleStick) el.scrollTop = el.scrollHeight; }
+    else if(!c.run.running && !c.tail) el.textContent = "（尚未运行）";
+  }catch(_){}
+}
+async function loadLog(){
+  if(!cur || !logStageSel.value) return;
+  try{
+    const d = await api(projApi("/log/" + logStageSel.value));
+    const el = $("#log_view");
+    el.textContent = d.tail || "（暂无日志，该阶段可能未运行过）";
+    el.scrollTop = el.scrollHeight;
+  }catch(e){ toast(e.message, "err") }
+}
+
+/* ---------------- 轮询 ---------------- */
+let polling = null;
+async function tick(){
+  if(!cur) return;
+  try{
+    curData = await api(projApi());
+    renderBadge();
+    if(activeTab === "overview") renderOverview();
+    if(activeTab === "run"){
+      pollConsole();
+      if(logStageSel.value) loadLog();
+    }
+  }catch(_){}
+  const fast = curData?.run?.running ? 1200 : 5000;
+  if(polling !== fast){ clearInterval(window._t); polling = fast; window._t = setInterval(tick, fast); }
+}
+function pollNow(){ clearTimeout(window._t0); window._t0 = setTimeout(tick, 100); }
+
+/* ---------------- 复核 ---------------- */
+async function loadReview(){
+  initCollapse();
+  loadSpeakers(); loadTranslation(); loadTtsList(); loadMixList();
+}
+/* R 卡片点击标题折叠/展开（data-open 初始态：1 展开 / 0 收起） */
+function initCollapse(){
+  document.querySelectorAll("[data-collapse]").forEach(card => {
+    if(card.dataset.bound) return;
+    card.dataset.bound = "1";
+    const h3 = card.querySelector(".toolbar h3");
+    const bodies = [...card.children].filter(el => !el.classList.contains("toolbar"));
+    const apply = () => {
+      const open = card.dataset.open === "1";
+      bodies.forEach(b => b.style.display = open ? "" : "none");
+      card.classList.toggle("collapsed", !open);
+    };
+    h3.addEventListener("click", e => {
+      if(e.target.closest("button,label,input,select,a")) return;
+      card.dataset.open = card.dataset.open === "1" ? "0" : "1";
+      apply();
+    });
+    apply();
+  });
+}
+async function loadArtifact(name){
+  const d = await api(projApi("/artifact/" + name));
+  return d;
+}
+async function loadSpeakers(){
+  try{
+    const d = await loadArtifact("speakers");
+    const layer = $("#spk_layer");
+    layer.textContent = d.edited ? "编辑层生效中" : "机器产物（未编辑）";
+    layer.className = "badge" + (d.edited ? " warn" : "");
+    const data = d.data || {};
+    const keys = Object.keys(data);
+    if(!keys.length){ $("#spk_body").innerHTML = `<div class="empty">尚无说话人数据，请先跑完 s04</div>`; return }
+    editing.speakers = JSON.parse(JSON.stringify(data));
+    $("#spk_body").innerHTML = `<table>
+      <tr><th>说话人</th><th>角色名</th><th>参考片段（逗号分隔）</th><th>试听</th></tr>
+      ${keys.map(k => `
+        <tr>
+          <td class="mono">${esc(k)}</td>
+          <td><input type="text" data-sp="character" data-k="${esc(k)}" value="${esc(data[k].character||"")}" style="min-width:110px"></td>
+          <td><input type="text" data-sp="ref_segments" data-k="${esc(k)}" value="${esc((data[k].ref_segments||[]).join(", "))}" style="min-width:180px"></td>
+          <td style="width:260px"><audio controls preload="none" src="${audioUrl(`05_voices/${k}/preview.wav`)}"></audio></td>
+        </tr>`).join("")}
+    </table>`;
+  }catch(e){ $("#spk_body").innerHTML = `<div class="empty">${esc(e.message)}</div>` }
+}
+$("#spk_reload").onclick = loadSpeakers;
+$("#spk_save").onclick = async () => {
+  try{
+    const data = editing.speakers || {};
+    $$('[data-sp]').forEach(el => {
+      const k = el.dataset.k;
+      if(el.dataset.sp === "character") data[k].character = el.value;
+      else data[k].ref_segments = el.value.split(/[,，]/).map(s=>s.trim()).filter(Boolean);
+    });
+    const d = await api(projApi("/edited/speakers"), {method:"POST", body:JSON.stringify({data})});
+    toast(`已保存 ${d.file}；从 s06 起重跑生效`, "ok");
+    loadSpeakers();
+  }catch(e){ toast(e.message, "err") }
+};
+
+async function loadTranslation(){
+  try{
+    const [d, segsD, alignD, mfD] = await Promise.all([
+      loadArtifact("translation"),
+      loadArtifact("segments").catch(()=>null),
+      loadArtifact("align_report").catch(()=>null),
+      loadArtifact("manifest").catch(()=>null),
+    ]);
+    const layer = $("#tr_layer");
+    layer.textContent = d.edited ? "编辑层生效中" : "机器产物（未编辑）";
+    layer.className = "badge" + (d.edited ? " warn" : "");
+    const segs = d.data?.segments || [];
+    editing.translation = JSON.parse(JSON.stringify(d.data || {segments:[]}));
+    TX_META = buildSegMeta(segsD, alignD, mfD);
+    MF_BY_ID = {};
+    for(const s of (mfD?.data?.segments || [])) MF_BY_ID[s.id] = s;
+    renderTranslation();
+  }catch(e){ $("#tr_body").innerHTML = `<div class="empty">${esc(e.message)}</div>` }
+}
+/* 段元数据：id -> {start,end,inputDur,speed,alignFile,rescue,overlap,fitDur}
+   （原声时间轴 + 最终配音时长 + 救援方式；rescue=gap|overlap） */
+let TX_META = {};
+let MF_BY_ID = {};   // 06_tts manifest：id -> {duration_factor, atempo, ...}
+function buildSegMeta(segsD, alignD, mfD){
+  const meta = {};
+  const ss = segsD?.data?.segments || [];
+  for(const s of ss) meta[s.id] = {start: +s.start||0, end: +s.end||0, speaker: s.speaker||""};
+  const as = alignD?.data?.segments || [];
+  for(const a of as){
+    if(!meta[a.id]) meta[a.id] = {};
+    meta[a.id].alignFile = a.file || "";
+    meta[a.id].inputDur = +a.input_dur||0;
+    meta[a.id].speed = +a.speed||1;
+    if(a.rescue) meta[a.id].rescue = a.rescue;
+    if(a.overlap) meta[a.id].overlap = +a.overlap;
+  }
+  // manifest 的救援元数据（fit_dur/rescue/pre_borrow）：align 缺省时兜底
+  for(const m of (mfD?.data?.segments || [])){
+    if(!m.rescue) continue;
+    if(!meta[m.id]) meta[m.id] = {};
+    if(!meta[m.id].rescue) meta[m.id].rescue = m.rescue;
+    if(m.fit_dur) meta[m.id].fitDur = +m.fit_dur;
+  }
+  return meta;
+}
+/* 语速倍率 = (1/duration_factor) × atempo × 摆放变速 = 相对 IndexTTS 自然合成（df=1）的倍率；
+   配色按**可懂度**：字符/秒（中文自然语速约 5~6 字/秒，>7 偏快，>8.5 偏赶） */
+function speedRatio(id, man){
+  const m = TX_META[id] || {};
+  const df = +man?.duration_factor || 1;
+  const at = +man?.atempo || 1;
+  const sp = m.speed || 1;
+  const total = (1 / df) * at * sp;
+  return total > 0 ? total : null;
+}
+function cpsOf(target, id, man){
+  const chars = (target||"").replace(/\s/g, "").length;
+  const m = TX_META[id] || {};
+  const dur = m.inputDur ? m.inputDur / (m.speed||1) : (+man?.actual_dur || 0);
+  return (chars && dur) ? chars / dur : null;
+}
+function speedBadge(r, cps, id){
+  if(r == null) return `<span class="hint">—</span>`;
+  const m = (id && TX_META[id]) || {};
+  const cls = (cps != null && cps >= 8.5) ? "err" : (cps != null && cps >= 7 || r >= 2) ? "warn" : "";
+  let tip = cps != null
+    ? `相对自然合成 ${r.toFixed(2)}x · 实际 ${cps.toFixed(1)} 字/秒（中文日常约 5~6）`
+    : `相对自然合成 ${r.toFixed(2)}x`;
+  if(m.rescue === "overlap") tip += ` · 叠话救援：与下一句重叠${m.overlap ? ` ${m.overlap.toFixed(2)}s` : ""}（已尾淡出）`;
+  else if(m.rescue === "gap") tip += " · 借空档救援：按时间轴真实窗口合成，未压预算";
+  return `<span class="badge ${cls}" title="${tip}">${r.toFixed(2)}x</span>`;
+}
+function srcClipUrl(id, pad=0.25){
+  const m = TX_META[id];
+  if(!m || !m.end) return "";
+  const t0 = Math.max(m.start - pad, 0).toFixed(2), t1 = (m.end + pad).toFixed(2);
+  return audioUrl("02_stems/vocals.wav") + `#t=${t0},${t1}`;
+}
+function dubClipUrl(id){
+  const m = TX_META[id];
+  return m?.alignFile ? audioUrl(m.alignFile) : "";
+}
+/* 原声片段播放器：媒体片段定位 + 重置按钮 + 播完后自动回到起点。
+   Chrome 对 #t= 片段第二次播放会从上次结束位置继续往后放（片段只定义
+   起始一次），所以监听 play：若播放头已越过片段终点或远在起点之前，
+   先拽回起点再播；重置按钮随时手动归位。 */
+function clipAudio(id){
+  const m = TX_META[id] || {};
+  const t0 = Math.max((m.start||0) - 0.25, 0), t1 = (m.end||0) + 0.25;
+  if(!m.end) return `<span class="hint">—</span>`;
+  return `<div class="clip">
+    <audio controls preload="none" data-frag-start="${t0.toFixed(2)}" data-frag-end="${t1.toFixed(2)}"
+      src="${srcClipUrl(id)}"></audio>
+    <button class="btn ghost small" data-clip-reset title="回到本句起点">⟲</button>
+  </div>`;
+}
+document.addEventListener("play", e => {
+  const a = e.target;
+  if(!(a instanceof HTMLAudioElement) || a.dataset.fragStart === undefined) return;
+  const st = parseFloat(a.dataset.fragStart), en = parseFloat(a.dataset.fragEnd);
+  // 播完一次后 currentTime 停在终点；或异常越界时，先归位再播
+  if(a.currentTime >= en - 0.1 || a.currentTime < st - 0.6){
+    try{ a.currentTime = st; }catch(_){}
+  }
+}, true);
+document.addEventListener("click", e => {
+  const b = e.target.closest("button[data-clip-reset]");
+  if(!b) return;
+  const a = b.parentElement.querySelector("audio");
+  if(a && a.dataset.fragStart !== undefined){
+    a.currentTime = parseFloat(a.dataset.fragStart) || 0;
+    a.play().catch(()=>{});
+  }
+});
+function renderTranslation(){
+  const segs = editing.translation?.segments || [];
+  const only = $("#tr_filter").checked;
+  const rows = segs.filter(s => !only || ["review","compress","overrun","underrun"].includes(s.strategy));
+  if(!segs.length){ $("#tr_body").innerHTML = `<div class="empty">尚无译文，请先跑完 s05</div>`; return }
+  if(!rows.length){ $("#tr_body").innerHTML = `<div class="empty">没有需要处理的段落 ✔</div>`; return }
+  const stratCls = {review:"err", compress:"warn", overrun:"err", underrun:"warn", native:"ok"};
+  $("#tr_body").innerHTML = `<table>
+    <tr><th>ID</th><th>原文</th><th>原声试听</th><th>译文（可编辑）</th><th>配音试听</th><th>语速</th><th>预算/预估</th><th>策略</th></tr>
+    ${rows.map(s => `
+      <tr>
+        <td class="mono">${esc(s.id)}</td>
+        <td><div class="src-text">${esc(s.source)}</div></td>
+        <td style="width:230px">${srcClipUrl(s.id) ? clipAudio(s.id) : `<span class="hint">—</span>`}</td>
+        <td><textarea data-tr="target" data-id="${esc(s.id)}">${esc(s.target||"")}</textarea></td>
+        <td style="width:230px">${dubClipUrl(s.id) ? `<audio controls preload="none" src="${dubClipUrl(s.id)}"></audio>` : `<span class="hint">未合成</span>`}</td>
+        <td class="num">${speedBadge(speedRatio(s.id, MF_BY_ID[s.id]), cpsOf(s.target, s.id, MF_BY_ID[s.id]), s.id)}</td>
+        <td class="num">${(+s.duration_budget||0).toFixed(1)}s / ${(+s.target_est_duration||0).toFixed(1)}s</td>
+        <td><span class="badge ${stratCls[s.strategy]||""}">${esc(s.strategy||"")}</span>
+            ${s.notes ? `<div class="hint" style="font-size:11px">${esc(s.notes)}</div>` : ""}</td>
+      </tr>`).join("")}
+    </table>`;
+}
+$("#tr_filter").onchange = renderTranslation;
+$("#tr_reload").onclick = loadTranslation;
+$("#tr_save").onclick = async () => {
+  try{
+    const data = editing.translation;
+    $$('[data-tr="target"]').forEach(el => {
+      const seg = data.segments.find(s => s.id === el.dataset.id);
+      if(seg) seg.target = el.value;
+    });
+    const d = await api(projApi("/edited/translation"), {method:"POST", body:JSON.stringify({data})});
+    toast(`已保存 ${d.file}；从 s07 起重跑生效`, "ok");
+    loadTranslation();
+  }catch(e){ toast(e.message, "err") }
+};
+
+async function loadTtsList(){
+  try{
+    const [d, trD, segsD] = await Promise.all([
+      loadArtifact("manifest"),
+      loadArtifact("translation").catch(()=>null),
+      loadArtifact("segments").catch(()=>null),
+    ]);
+    if(!TX_META || !Object.keys(TX_META).length) TX_META = buildSegMeta(segsD, null, d);
+    const tx = {};
+    for(const s of (trD?.data?.segments || [])) tx[s.id] = s;
+    const segs = d.data?.segments || [];
+    if(!segs.length){ $("#tts_body").innerHTML = `<div class="empty">尚无合成结果，请先跑完 s07</div>`; return }
+    $("#tts_body").innerHTML = `<table>
+      <tr><th>ID</th><th>说话人</th><th>原文</th><th>译文</th><th>原声试听</th><th>语速</th><th>时长</th><th>配音试听</th></tr>
+      ${segs.map(s => {
+        const t = tx[s.id] || {};
+        const m = TX_META[s.id] || {};
+        const dub = m.alignFile || s.file;
+        return `
+        <tr>
+          <td class="mono">${esc(s.id)}</td>
+          <td class="mono">${esc(s.speaker||"—")}</td>
+          <td><div class="src-text">${esc(t.source||"")}</div></td>
+          <td><div class="src-text">${esc(t.target||"")}</div></td>
+          <td style="width:230px">${srcClipUrl(s.id) ? clipAudio(s.id) : `<span class="hint">—</span>`}</td>
+          <td class="num">${speedBadge(speedRatio(s.id, s), cpsOf(t.target, s.id, s), s.id)}</td>
+          <td class="num">${(+s.actual_dur ?? +s.duration ?? 0).toFixed(2)}s${s.target_dur||s.budget?` / ${((+(s.target_dur ?? s.budget))||0).toFixed(1)}s`:""}</td>
+          <td style="width:230px">${dub ? `<audio controls preload="none" src="${audioUrl(dub)}"></audio>` : `<span class="hint">—</span>`}</td>
+        </tr>`;}).join("")}
+    </table>`;
+  }catch(e){ $("#tts_body").innerHTML = `<div class="empty">${esc(e.message)}</div>` }
+}
+$("#tts_reload").onclick = loadTtsList;
+
+async function loadMixList(){
+  const items = [
+    ["08_mix/mix.wav", "成品混音（配音 + 背景）"],
+    ["08_mix/dub.wav", "纯配音轨"],
+    ["02_stems/no_vocals.wav", "原背景"],
+    ["01_audio/audio_master.wav", "原始音轨"],
+  ];
+  const box = $("#mix_body");
+  box.innerHTML = "";
+  for(const [rel, label] of items){
+    const ok = await fetch(audioUrl(rel), {method:"HEAD"}).then(r=>r.ok).catch(()=>false);
+    if(!ok) continue;
+    box.insertAdjacentHTML("beforeend", `
+      <div style="margin-bottom:10px">
+        <div style="font-size:12.5px;color:var(--dim);margin-bottom:3px">${label} <span class="mono" style="opacity:.7">${rel}</span></div>
+        <audio controls preload="none" src="${audioUrl(rel)}"></audio>
+      </div>`);
+  }
+  if(!box.children.length) box.innerHTML = `<div class="empty">尚无混音结果，请先跑完 s09</div>`;
+}
+
+/* ---------------- 交付物 ---------------- */
+async function loadOutput(){
+  try{
+    const d = await api(projApi("/output"));
+    const files = d.files || [];
+    if(!files.length){ $("#out_list").innerHTML = `<div class="empty">09_output 为空，请先跑完 s10</div>`; $("#out_media").innerHTML=""; return }
+    $("#out_list").innerHTML = files.map(f => `
+      <div class="outfile">
+        <span>${f.name.endsWith(".mp4")?"🎞":f.name.endsWith(".srt")?"💬":"🎵"}</span>
+        <span class="grow mono">${esc(f.name)}</span>
+        <span class="dim">${fmtSize(f.size)}</span>
+        <a class="btn ghost small" href="${projApi("/output/"+encodeURIComponent(f.name))}?download=1">下载</a>
+      </div>`).join("");
+    const mp4 = files.find(f => /\.(mp4|mkv|webm)$/i.test(f.name));
+    const srt = files.find(f => /\.srt$/i.test(f.name));
+    let html = "";
+    if(mp4) html += `<h3 style="font-size:14px;margin-bottom:8px">成片预览</h3>
+      <video controls src="${projApi("/output/"+encodeURIComponent(mp4.name))}"></video>`;
+    if(srt){
+      const text = await fetch(projApi("/output/"+encodeURIComponent(srt.name))).then(r=>r.text()).catch(()=> "");
+      html += `<h3 style="font-size:14px;margin:14px 0 8px">字幕</h3><pre style="max-height:260px">${esc(text)}</pre>`;
+    }
+    $("#out_media").innerHTML = html;
+  }catch(e){ toast(e.message, "err") }
+}
+$("#out_reload").onclick = loadOutput;
+
+/* ---------------- 质检（I-2：一键跑 qc.py，异步轮询） ---------------- */
+let qcTimer = null;
+function qcBadge(status){
+  return status === "pass" ? `<span class="badge ok">PASS</span>`
+       : status === "fail" ? `<span class="badge err">FAIL</span>`
+       : `<span class="badge warn">WARN</span>`;
+}
+function stopQcPoll(){ if(qcTimer){ clearTimeout(qcTimer); qcTimer = null; } }
+async function runQc(){
+  try{
+    await api(projApi("/qc"), {method:"POST", body:JSON.stringify({})});
+    toast("质检已启动：声纹项逐段计算，约需 1–4 分钟", "ok");
+  }catch(e){ toast(e.message, "err"); return }
+  pollQc();
+}
+async function pollQc(){
+  stopQcPoll();
+  let d;
+  try{ d = await api(projApi("/qc")); }
+  catch(e){ $("#out_qc").innerHTML = `<div class="empty">${esc(e.message)}</div>`; return }
+  if(d.running){
+    $("#out_qc").innerHTML = `<span class="badge run">🔍 质检中…（声纹项逐段计算，退出页面不中断）</span>`;
+    qcTimer = setTimeout(pollQc, 2500);
+    return;
+  }
+  renderQc(d);
+}
+function renderQc(d){
+  const box = $("#out_qc"); if(!box) return;
+  if(!d.rows){
+    box.innerHTML = `<div class="empty">暂无质检结果${d.log ? "（日志不完整，上次质检可能被中断）" : "——点上方「🔍 质检」开始"}</div>`;
+    return;
+  }
+  const nFail = d.rows.filter(r => r.status === "fail").length;
+  const nWarn = d.rows.filter(r => r.status === "warn").length;
+  const head = `<div class="toolbar" style="margin-bottom:6px">
+      <span class="badge ${nFail ? "err" : nWarn ? "warn" : "ok"}">${esc(d.summary || "质检完成")}</span>
+      <div class="spacer"></div>
+      <button class="btn ghost small" id="out_qc_again">重新质检</button></div>`;
+  const rows = d.rows.map(r => `
+    <div class="qcrow">${qcBadge(r.status)}
+      <span class="qc-name">${esc(r.check)}</span>
+      <span class="qc-detail">${esc(r.detail)}</span>
+    </div>`).join("");
+  box.innerHTML = head + rows;
+  $("#out_qc_again").onclick = runQc;
+}
+$("#out_qc_btn").onclick = runQc;
+
+/* ---------------- 标签页 ---------------- */
+function switchTab(name){
+  activeTab = name;
+  $$("nav button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
+  $$("section.tab").forEach(s => s.classList.toggle("active", s.id === "tab-" + name));
+  if(name === "run"){ pollConsole(); if(logStageSel.value) loadLog(); }
+  if(name === "batch"){ loadBatch(); }
+  if(name === "review") loadReview();
+  if(name === "output"){ loadOutput(); pollQc(); }
+  if(name === "config" && curData) renderConfig();
+}
+$$("nav button").forEach(b => b.onclick = () => switchTab(b.dataset.tab));
+$("#project_select").onchange = e => { cur = e.target.value; localStorage.setItem("dub_cur", cur); loadProject(); };
+$("#btn_reload").onclick = () => loadProjects();
+
+/* ---------------- 批量处理 ---------------- */
+let batchTimer = null;
+const BATCH_STATE_COLOR = {
+  ok: "var(--ok)", skip: "var(--dim)", running: "var(--warn)",
+  fail: "var(--err)", "qc-fail": "var(--warn)", missing: "var(--err)",
+};
+function renderBatch(d){
+  const run = d.run || {};
+  const st = $("#batch_state");
+  st.textContent = run.running ? `▶ 批量运行中` : (run.kind === "batch" && run.exit_code != null
+    ? (run.exit_code === 0 ? "✔ 批量完成" : `✘ 退出码 ${run.exit_code}`) : "未运行");
+  st.style.color = run.running ? "var(--warn)" : (run.exit_code === 0 ? "var(--ok)" : "var(--dim)");
+  const info = $("#batch_info");
+  if(run.running && run.project){
+    info.style.display = "";
+    info.textContent = `当前: ${run.project} · 已运行 ${Math.floor((run.elapsed||0)/60)} 分 ${Math.floor((run.elapsed||0)%60)} 秒`;
+  } else info.style.display = "none";
+  $("#batch_console").textContent = (d.log || "").trim() || "（尚未运行）";
+  $("#batch_console").scrollTop = $("#batch_console").scrollHeight;
+
+  const items = Object.entries(d.status?.items || {});
+  const box = $("#batch_progress");
+  if(!items.length){ box.innerHTML = `<div class="empty">尚无批量记录</div>`; return }
+  const done = items.filter(([,v]) => v.state === "ok" || v.state === "skip").length;
+  box.innerHTML = `
+    <div class="hint" style="margin-bottom:6px">共 ${items.length} 个 · 完成 ${done} ·
+      ${d.status?.started ? "开始于 " + esc(d.status.started) : ""}
+      ${d.status?.finished ? " · 结束于 " + esc(d.status.finished) : ""}</div>
+    <table>
+      <tr><th>项目</th><th>状态</th><th>耗时</th><th>质检</th></tr>
+      ${items.map(([pid, v]) => `
+        <tr>
+          <td class="mono"><a href="#" onclick="switchCur('${esc(pid)}');return false" style="color:inherit">${esc(pid)}</a></td>
+          <td style="color:${BATCH_STATE_COLOR[v.state] || "var(--dim)"}">${esc(v.state)}${v.note ? ` <small>(${esc(v.note)})</small>` : ""}</td>
+          <td class="num">${v.minutes != null ? v.minutes + " min" : "—"}</td>
+          <td class="num">${v.qc_exit != null ? (v.qc_exit === 0 ? "✔ 通过" : `✘ ${v.qc_exit}`) : "—"}</td>
+        </tr>`).join("")}
+    </table>`;
+}
+async function loadBatch(){
+  try{
+    const d = await api("/api/batch");
+    renderBatch(d);
+    // 继承下拉：只填一次
+    const sel = $("#batch_inherit");
+    if(!sel.options.length){
+      let opts = `<option value="">不继承（本地 MarianMT 翻译）</option>`;
+      try{
+        const pj = await api("/api/projects");
+        for(const p of pj.projects){
+          try{
+            const x = await api(`/api/project/${encodeURIComponent(p.id)}`);
+            const b = x.backend?.label ? ` · ${x.backend.label}` : "";
+            opts += `<option value="${esc(p.id)}">${esc(p.id)}${esc(b)}</option>`;
+          }catch(_){}
+        }
+      }catch(_){}
+      sel.innerHTML = opts;
+    }
+    clearTimeout(batchTimer);
+    if(d.run?.running) batchTimer = setTimeout(loadBatch, 3000);
+  }catch(e){ $("#batch_console").textContent = "加载失败: " + e.message }
+}
+function switchCur(pid){ cur = pid; localStorage.setItem("dub_cur", pid); loadProject(); switchTab("overview"); }
+$("#btn_batch_start").onclick = async () => {
+  const src = $("#batch_src").value.trim();
+  if(!src){ toast("请填写视频文件夹", "err"); return }
+  const btn = $("#btn_batch_start");
+  btn.disabled = true;
+  try{
+    await api("/api/batch/start", {method:"POST", body: JSON.stringify({
+      src, inherit: $("#batch_inherit").value, boost: $("#batch_boost").value,
+    })});
+    toast("批量已启动", "ok");
+    switchTab("batch");
+  }catch(e){ toast(e.message, "err") }
+  btn.disabled = false;
+};
+$("#btn_batch_stop").onclick = async () => {
+  try{ await api("/api/batch/stop", {method:"POST", body:"{}"}); toast("已发送停止", "ok") }
+  catch(e){ toast(e.message, "err") }
+};
+
+/* ---------------- 新建项目 ---------------- */
+$("#btn_new").onclick = async () => {
+  const today = new Date(), pad = n => String(n).padStart(2,"0");
+  $("#np_id").value = `${today.getFullYear()}${pad(today.getMonth()+1)}${pad(today.getDate())}_`;
+  $("#np_src").value = ""; $("#np_err").textContent = "";
+  // 翻译设置继承下拉：列出已有项目，默认选当前项目（硅基流动 Key 等直接沿用）
+  const sel = $("#np_inherit");
+  let opts = `<option value="">不继承（默认 DeepSeek，未配 Key）</option>`;
+  try{
+    const d = await api("/api/projects");
+    for(const p of d.projects){
+      try{
+        const pj = await api(`/api/project/${encodeURIComponent(p.id)}`);
+        const b = pj.backend?.label ? ` · ${pj.backend.label}` : "";
+        opts += `<option value="${esc(p.id)}"${p.id===cur?" selected":""}>${esc(p.id)}${esc(b)}</option>`;
+      }catch(_){}
+    }
+  }catch(_){}
+  sel.innerHTML = opts;
+  $("#m_new").classList.add("open");
+};
+$$("[data-close]").forEach(b => b.onclick = () =>
+  b.closest(".modal-mask").classList.remove("open"));
+$("#np_create").onclick = async () => {
+  const id = $("#np_id").value.trim(), src = $("#np_src").value.trim();
+  const device = document.querySelector('input[name="np_device"]:checked')?.value || "cpu";
+  const solo = !!$("#np_solo").checked;
+  if(!id || !src){ $("#np_err").textContent = "请填写项目 ID 并选择源视频"; return }
+  const btn = $("#np_create");
+  btn.disabled = true; btn.textContent = "正在复制源文件…";
+  $("#np_err").textContent = "";
+  try{
+    const r = await api("/api/projects", {method:"POST",
+      body: JSON.stringify({
+        project_id:id, source_path:src,
+        inherit_from:$("#np_inherit").value,
+        device,
+        single_speaker: solo,
+      })});
+    toast(`项目已创建：${r.id}（翻译：${r.backend?.label || "默认"} · 设备：${device}${solo ? " · 单主播" : ""}）`, "ok");
+    $("#m_new").classList.remove("open");
+    await loadProjects(false);
+    switchTab("overview");
+  }catch(e){ $("#np_err").textContent = e.message }
+  btn.disabled = false; btn.textContent = "创建";
+};
+
+/* 环境自检 */
+let stTimer = null;
+function renderSelftest(st){
+  const log = $("#st_log");
+  const html = (st.log || "").split("\n").map(l => {
+    const e = esc(l);
+    if(/^\S*\s*FAIL\b/.test(l) || /失败/.test(l) && !/环境提示/.test(l))
+      return `<span style="color:var(--err)">${e}</span>`;
+    if(/^\S*\s*warn\b/.test(l) || /, \d+ 项环境提示$/.test(l))
+      return `<span style="color:var(--warn)">${e}</span>`;
+    if(/^\S*\s*ok\b/.test(l) || /通过, 0 失败$/.test(l) || /, 0 失败, \d+/.test(l))
+      return `<span style="color:var(--ok)">${e}</span>`;
+    return e;
+  }).join("\n");
+  log.innerHTML = html || "（暂无输出，点击「开始自检」）";
+  log.scrollTop = log.scrollHeight;
+  const badge = $("#st_status"); badge.style.display = "inline-block";
+  const btn = $("#st_run");
+  if(st.running){
+    badge.className = "badge run"; badge.textContent = "▶ 自检运行中…";
+    btn.disabled = true; btn.textContent = "自检中…";
+    stTimer = setTimeout(pollSelftest, 1500);
+  }else{
+    btn.disabled = false; btn.textContent = "开始自检";
+    if(st.exit_code === 0){
+      const n = (st.log || "").split("\n").filter(l => /^\S*\s*warn\b/.test(l)).length;
+      if(n > 0){ badge.className = "badge warn"; badge.textContent = `✔ 通过（${n} 项环境缺失，跑流水线前先运行 setup.bat）`; }
+      else { badge.className = "badge ok"; badge.textContent = "✔ 自检通过，环境完备"; }
+    }
+    else if(st.exit_code != null){ badge.className = "badge err"; badge.textContent = `✘ 自检失败（退出码 ${st.exit_code}）`; }
+    else badge.style.display = "none";
+  }
+}
+async function pollSelftest(){
+  try{ renderSelftest(await api("/api/selftest")); }
+  catch(e){ toast(e.message, "err"); $("#st_run").disabled = false; $("#st_run").textContent = "开始自检"; }
+}
+$("#btn_selftest").onclick = () => {
+  $("#m_selftest").classList.add("open");
+  clearTimeout(stTimer); pollSelftest();
+};
+$("#st_run").onclick = async () => {
+  try{ await api("/api/selftest", {method:"POST", body:"{}"}); }
+  catch(e){ toast(e.message, "err"); return; }
+  clearTimeout(stTimer); pollSelftest();
+};
+
+/* 浏览磁盘 */
+let browsePath = "";
+$("#np_browse").onclick = async () => {
+  $("#m_browse").classList.add("open");
+  browse("");
+};
+async function browse(path){
+  try{
+    const d = await api("/api/browse" + (path ? "?path=" + encodeURIComponent(path) : ""));
+    browsePath = d.path;
+    $("#br_crumb").innerHTML = d.path
+      ? `<span data-p="">🖥 此电脑</span>` + d.path.split("\\").filter(Boolean)
+          .map((part, i, arr) => ` › <span data-p="${esc(arr.slice(0,i+1).join("\\"))}\\">${esc(part)}</span>`).join("")
+      : `<span>选择磁盘</span>`;
+    $("#br_list").innerHTML = d.entries.map(e => `
+      <div class="it ${e.type}" data-t="${e.type}" data-n="${esc(e.name)}">
+        <span>${e.type==="dir"?"📁":"🎬"}</span><span>${esc(e.name)}</span>
+        ${e.size?`<span class="sz">${fmtSize(e.size)}</span>`:""}
+      </div>`).join("") || `<div class="empty">此目录没有媒体文件</div>`;
+    $$("#br_crumb span").forEach(s => s.onclick = () => browse(s.dataset.p));
+    $$("#br_list .it").forEach(it => it.onclick = () => {
+      if(it.dataset.t === "dir") browse(browsePath ? browsePath + "\\" + it.dataset.n : it.dataset.n);
+      else{
+        $("#np_src").value = browsePath + "\\" + it.dataset.n;
+        $("#m_browse").classList.remove("open");
+      }
+    });
+  }catch(e){ toast(e.message, "err") }
+}
+
+/* ---------------- 启动 ---------------- */
+loadProjects().then(() => { tick(); });
+</script>
+<script src="i18n.js?v=2"></script>
+</body>
+</html>

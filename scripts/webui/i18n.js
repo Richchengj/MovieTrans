@@ -1,0 +1,405 @@
+/* 中英双语支持：字典 + 文本节点替换 + 语言切换
+ * - 原理：遍历 DOM 文本节点，按字典把中文替换为英文（保存原文支持切回）
+ * - 动态渲染：MutationObserver 防抖触发，任何重渲染自动翻译
+ * - 语言选择存 localStorage("dub_lang")
+ */
+"use strict";
+
+const I18N = {
+  "影视配音流水线": "Movie Dubbing Pipeline",
+  "切换项目": "Switch project",
+  "未运行": "Idle",
+  "自检": "Self-test",
+  "新建项目": "New project",
+  "刷新项目列表": "Refresh project list",
+  "概览": "Overview",
+  "批量处理": "Batch",
+  "配置": "Config",
+  "运行": "Run",
+  "人工复核": "Review",
+  "交付物": "Deliverables",
+  "项目信息": "Project info",
+  "跑全流程": "▶ Run full pipeline",
+  "停止": "⏹ Stop",
+  "强制重跑": "Force re-run",
+  "输入未变的阶段会自动跳过（断点续跑）；改动某段配置后只会重算受影响的阶段。":
+    "Unchanged stages are skipped automatically (resumable); changing a config section only re-runs affected stages.",
+  "质检卡点（每部片子都要过）": "QC checkpoints (required for every video)",
+  "说话人是否被拆错": "Speakers split incorrectly?",
+  "译文准确、长度不超预算": "Translation accurate, within budget?",
+  "克隆音色像不像本人": "Cloned voice sounds like the actor?",
+  "混音无双重人声、响度合适": "Mix free of double voices, loudness OK?",
+  "复核页 · R1": "Review page · R1",
+  "复核页 · R2": "Review page · R2",
+  "复核页 · R3": "Review page · R3",
+  "复核页 · R4": "Review page · R4",
+  "人工修改一律保存为": "Manual edits are always saved as",
+  "编辑层，脚本永不覆盖。": "edit layers; scripts never overwrite them.",
+  "阶段进度": "Stage progress",
+  "日志": "Log",
+  "查看该阶段完整输出；": "View full output of this stage;",
+  "从此重跑": "Re-run from here",
+  "从该阶段起跑到底，输入未变的后续阶段自动跳过。\n      状态含义：": "Run from this stage to the end; unchanged later stages are skipped. Status meanings:",
+  "完成": "done",
+  "本次跳过（沿用上次结果）": "skipped (reused last result)",
+  "运行中": "running",
+  "失败": "failed",
+  "上次中断": "interrupted",
+  "项目配置": "Project config",
+  "保存配置": "Save config",
+  "音频规格": "Audio spec",
+  "改后全链路重算": "changing it re-runs the whole pipeline",
+  "母带采样率（Hz）": "Master sample rate (Hz)",
+  "拆音轨与 s10 装配成片共用的音频基准": "Audio baseline shared by s01 extraction and s10 assembly",
+  "对白 / 背景分离": "Dialogue / background separation",
+  "改后从 s02 起重算": "changing it re-runs from s02",
+  "分离模型": "Separation model",
+  "设备": "Device",
+  "降噪（可选，默认关闭）": "Denoise (optional, off by default)",
+  "改后从 s03 起重算": "changing it re-runs from s03",
+  "启用 DeepFilterNet 降噪去混响": "Enable DeepFilterNet de-noise / de-reverb",
+  "无论开关，s03 都会产出 vocals_clean.wav，下游只认这一个文件": "Either way s03 produces vocals_clean.wav — downstream only reads this one file",
+  "识别与说话人": "ASR & speakers",
+  "改后从 s04 起重算": "changing it re-runs from s04",
+  "模型": "Model",
+  "量化精度": "Quantization",
+  "批大小": "Batch size",
+  "采样率（Hz）": "Sample rate (Hz)",
+  "说话人分离方式": "Speaker diarization method",
+  "auto（推荐）": "auto (recommended)",
+  "有 Token 走官方 pyannote": "With a token uses official pyannote",
+  "无 Token 用魔搭本地版": "without a token uses the bundled ModelScope build",
+  "再退声纹聚类": "then falls back to voiceprint clustering",
+  "pyannote": "pyannote",
+  "Token 或本地魔搭权重（models/pyannote/，已随包）": "Token or bundled ModelScope weights (models/pyannote/, included)",
+  "embedding": "embedding",
+  "本地声纹聚类，完全离线": "Local voiceprint clustering, fully offline",
+  "none": "none",
+  "单人影片：全部归为 SPK_01": "Single-speaker videos: all segments become SPK_01",
+  "HuggingFace Token（可选）": "HuggingFace token (optional)",
+  "不填也能跑：默认用随包的魔搭本地版 pyannote（完全离线）。\n            填 Token 切换官方门控权重（3.1 完整版，需先在 huggingface.co 接受模型条款）":
+    "Works without it: uses the bundled ModelScope pyannote build (fully offline).\n            Fill in to switch to the official gated weights (full 3.1; accept model terms on huggingface.co first)",
+  "聚类阈值": "Clustering threshold",
+  "最少说话人数": "Min speakers",
+  "留空自动": "blank = auto",
+  "最多说话人数": "Max speakers",
+  "翻译（本地 / API）": "Translation (local / API)",
+  "改后从 s05 起重算": "changing it re-runs from s05",
+  "源语言": "Source language",
+  "英语": "English",
+  "中文": "Chinese",
+  "识别也用它": "used by ASR too",
+  "目标语言": "Target language",
+  "日语": "Japanese",
+  "粤语": "Cantonese",
+  "配音也用它": "used by TTS too",
+  "本地 MarianMT": "Local MarianMT",
+  "完全离线、免费、无需 Key；质量一般，适合跑通流程": "Fully offline, free, no key needed; quality is fair, good for dry runs",
+  "推荐。译文质量高、便宜，需要 API Key": "Recommended. High quality, cheap, needs an API key",
+  "官方接口，需要 OPENAI 兼容的 Key": "Official API, needs an OpenAI-compatible key",
+  "自定义兼容 API": "Custom compatible API",
+  "任何 OpenAI 协议服务（需自填 base_url）": "Any OpenAI-protocol service (set base_url yourself)",
+  "明文存入 project.json；也可留空改用环境变量 DEEPSEEK_API_KEY / OPENAI_API_KEY / DUB_LLM_API_KEY": "Stored in plain text in project.json; or leave empty and use env vars DEEPSEEK_API_KEY / OPENAI_API_KEY / DUB_LLM_API_KEY",
+  "留空用默认": "leave empty for default",
+  "模型名": "Model name",
+  "高级参数": "Advanced parameters",
+  "语速预算（字/秒）": "Pace budget (chars/sec)",
+  "长度比上限": "Max length ratio",
+  "超时（秒）": "Timeout (sec)",
+  "失败 / 未配 Key 时退回本地模型": "Fall back to local model on failure / missing key",
+  "本地兜底模型": "Local fallback model",
+  "音色档案": "Voice profiles",
+  "改后从 s06 起重算": "changing it re-runs from s06",
+  "参考音频时长上限（秒）": "Reference audio max length (sec)",
+  "从原声对白截取多长的片段给 s06 提音色": "How much of the original dialogue to cut for s06 voice cloning",
+  "最短参考（秒）": "Min reference (sec)",
+  "短于此长度的片段不参与克隆": "Segments shorter than this are excluded from cloning",
+  "克隆配音": "Voice cloning",
+  "改后从 s07 起重算": "changing it re-runs from s07",
+  "引擎": "Engine",
+  "语气模式": "Tone mode",
+  "跟随参考音频": "Follow reference audio",
+  "语气取自原声对白片段；英音参考念中文可能生硬": "Tone comes from the original dialogue clip; an English-accented reference may sound stiff in Chinese",
+  "文本智能分析": "Text sentiment analysis",
+  "从译文台词分析情感引导语气；音色仍是原演员，情感更浓，部分影片可能过烈": "Analyzes sentiment from the translated line to guide tone; voice is still the original actor — more emotional, may be too strong for some films",
+  "语速提升（1.0 = 默认朗读速度）": "Pace boost (1.0 = default narrating speed)",
+  "合成时原生提速，无变速失真。电影对白约 5.5 字/秒，\n            默认朗读腔约 4 字/秒；建议 1.10–1.20。\n            译文短于原声时尾部自然留白作句间间隔": "Native speed-up during synthesis, no time-stretch artifacts. Movie dialogue ≈ 5.5 chars/sec,\n            default narration ≈ 4 chars/sec; suggested 1.10–1.20.\n            If a line is shorter than the original, the tail becomes a natural pause",
+  "模式合成很慢（约 25 倍实时）；有显卡请选 cuda 并关闭占显存的程序。\n        文本分析模式每段多一次轻量推理（1–2 秒），语气更戏剧化，觉得过烈就切回跟随参考音频。":
+    "mode is slow on CPU (≈25× realtime); with a GPU pick cuda and close VRAM-hungry apps.\n        Text-analysis mode adds one light inference per segment (1–2 s) — more dramatic tone; switch back if too strong.",
+  "时间对齐": "Time alignment",
+  "改后从 s08 起重算": "changing it re-runs from s08",
+  "变速上限": "Max speed-up",
+  "可借用间隙（秒）": "Borrowable gap (sec)",
+  "只加速不放慢：配音短于时间窗时保持合成语速，尾部留白自然成为句间间隔；\n        超窗时按变速上限加速，仍超则标 overrun 提示回译精简。":
+    "Speed up only, never slow down: if a line is shorter than its window, the tail becomes a natural pause;\n        over-length lines are sped up to the cap, anything still over is flagged overrun for manual trimming.",
+  "混音": "Mixing",
+  "改后从 s09 起重算": "changing it re-runs from s09",
+  "背景增益 dB": "Background gain dB",
+  "闪避深度 dB": "Ducking depth dB",
+  "目标响度 LUFS": "Target loudness LUFS",
+  "字幕装配": "Subtitles",
+  "改后从 s10 起重算": "changing it re-runs from s10",
+  "把中文字幕烧录进画面": "Burn Chinese subtitles into the video",
+  "默认关：只生成 .srt 字幕文件（成片视频流直接拷贝，秒级完成）。\n          开启后视频需重编码，耗时显著增加；适合直接发平台的场景。\n          源视频自带内封字幕流时会在日志提示（不继承原字幕）；源画面底部已有硬字幕（如已翻译过的视频）时，烧录会双层叠加，建议保持关闭。":
+    "Off by default: only generates an .srt file (video stream is copied, done in seconds).\n          On: video must be re-encoded — much slower; for direct publishing.\n          If the source has embedded subtitle streams it is noted in the log (not inherited); if the source already has burned-in hard subs, burning adds a second layer — keep this off.",
+  "字体": "Font",
+  "字号": "Font size",
+  "底边距（px）": "Bottom margin (px)",
+  "配置区块按流水线阶段 s01": "Config blocks map to pipeline stages s01",
+  "排列，改哪块就从对应阶段起重算。\n      注意：译文或语言变化会让 s07 配音重新合成（耗时最长）；tts 参数由 s06/s07 共享，\n      改其中任一项会两个一起失效。确认满意再保存。":
+    "–s10; change a block and only its stage re-runs.\n      Note: translation or language changes re-synthesize s07 (the longest stage); tts params are shared by s06/s07 —\n      changing either invalidates both. Save when satisfied.",
+  "批量转换": "Batch conversion",
+  "视频文件夹（递归扫描全部 mp4/mkv/mov…，短的先跑）": "Video folder (recursively scans all mp4/mkv/mov…, shortest first)",
+  "翻译设置继承：批量里每个视频都用这套翻译配置": "Inherited translation config: every video in the batch uses it",
+  "语速提升系数": "Pace boost factor",
+  "开始批量": "▶ Start batch",
+  "每个视频自动建项目": "Each video gets its own project",
+  "全流程": "full pipeline",
+  "质检，输出到项目目录（下拉框选项目可看详情）。": "QC; outputs go to each project folder (pick a project above for details).",
+  "继承": "Inherit:",
+  "选一个配好翻译的项目（如硅基流动 Key），批量里所有视频沿用它的翻译设置；\n      语速提升建议 1.10–1.25。\n      同一时间只能跑一个任务：批量与单项目流水线互斥。":
+    "pick a project with translation configured (e.g. SiliconFlow key); every batch video reuses it;\n      pace boost 1.10–1.25 suggested.\n      Only one job at a time: batch and single-project runs are mutually exclusive.",
+  "进度": "Progress",
+  "尚无批量记录": "No batch runs yet",
+  "控制台（每行带时间戳）": "Console (each line time-stamped)",
+  "（尚未运行）": "(not started)",
+  "运行控制": "Run control",
+  "从某阶段起": "From stage",
+  "仅某阶段": "Only stage",
+  "单段调试，可留空": "single-segment debug, optional",
+  "开始": "▶ Start",
+  "单段调试": "Single-segment debug",
+  "只会真正作用于 s07/s08 等支持 --seg 的阶段，其余阶段自动忽略。\n      同一时间只能跑一条流水线。":
+    "Only applies to stages that support --seg (s07/s08 etc.); ignored elsewhere.\n      Only one pipeline at a time.",
+  "阶段日志": "Stage logs",
+  "刷新": "Refresh",
+  "选择阶段查看日志": "Pick a stage to view its log",
+  "说话人核对": "R1 · Speaker check",
+  "保存编辑层": "💾 Save edit layer",
+  "听 试听 判断同一演员是否被拆成多个 SPK；是的话合并 character 名，\n      或增删 ref_segments 里的片段 ID。保存后写入 speakers.edited.json，需从 s06 起重跑生效。":
+    "Listen to the clips to check whether one actor was split into several SPKs; if so merge the character names,\n      or edit the ref_segments IDs. Saving writes speakers.edited.json — re-run from s06 to apply.",
+  "译文复核": "R2 · Translation review",
+  "只看需处理": "Only flagged",
+  "可直接改；超预算的段落建议先精简文字。保存后写入 translation.edited.json，需从 s07 起重跑生效。":
+    "Edit in place; trim over-budget lines. Saving writes translation.edited.json — re-run from s07 to apply.",
+  "克隆试听": "R3 · Clone audition",
+  "混音试听": "R4 · Mix audition",
+  "交付物（09_output）": "Deliverables (09_output)",
+  "环境自检": "Environment self-test",
+  "检查运行环境（ffmpeg / 目录 / 各阶段依赖）": "Check runtime (ffmpeg / folders / per-stage dependencies)",
+  "检查 Python / ffmpeg / 目录结构 / 各阶段依赖是否就位，全程无网络请求。换新机器后先跑一遍。":
+    "Checks Python / ffmpeg / folders / per-stage dependencies, fully offline. Run it first on a new machine.",
+  "关闭": "Close",
+  "开始自检": "▶ Run self-test",
+  "新建项目：选一部影片来跑": "New project: pick a video to run",
+  "项目 ID": "Project ID",
+  "建议": "suggested:",
+  "日期_片段名": "date_clipname",
+  "字符，不含 \\ / :": "chars, no \\ / :",
+  "源视频路径": "Source video path",
+  "浏览": "Browse",
+  "文件会被复制到项目的 00_source/ 目录（大文件需要一些时间）": "The file will be copied into the project's 00_source/ folder (large files take a moment)",
+  "翻译设置": "Translation config",
+  "直接沿用某个旧项目的翻译后端与 Key（推荐选已配好的）": "Reuse an existing project's translation backend and key (recommended)",
+  "运行设备": "Run device",
+  "稳妥）": "safe)",
+  "无需腾显存，但 TTS 慢约 25 倍": "No VRAM needed, but TTS is ~25× slower",
+  "快）": "fast)",
+  "需先退出占显存的程序（如 ComfyUI）": "Close VRAM-hungry apps first (e.g. ComfyUI)",
+  "取消": "Cancel",
+  "创建": "Create",
+  "选择源文件": "Select source file",
+  "拆音轨": "Extract audio",
+  "提取音轨": "extract audio track",
+  "人声分离": "Vocal separation",
+  "分出对白/背景": "split dialogue/background",
+  "降噪": "Denoise",
+  "可选）": "optional)",
+  "识别": "ASR",
+  "说话人": "Speakers",
+  "声纹": "voiceprints",
+  "翻译": "Translate",
+  "本地 / API": "local / API",
+  "剪辑参考音频": "cut reference audio",
+  "时长对齐": "Time alignment",
+  "变速不变调": "tempo change, pitch kept",
+  "闪避": "ducking",
+  "响度归一": "loudness normalize",
+  "装配": "Assemble",
+  "成片": "final video",
+  "字幕": "subtitles",
+  "无项目": "no project",
+  "上次运行成功": "last run succeeded",
+  "已手动停止": "stopped manually",
+  "失败（退出码": "failed (exit code",
+  "开始于": "started at",
+  "已运行": "elapsed",
+  "当前": "current:",
+  "完成 /": "done /",
+  "运行中 /": "running /",
+  "失败 /": "failed /",
+  "上次中断。": "interrupted.",
+  "源文件": "Source",
+  "创建时间": "Created",
+  "项目目录": "Project folder",
+  "阶段": "Stage",
+  "说明": "Description",
+  "状态": "Status",
+  "开始时间": "Start",
+  "结束时间": "End",
+  "耗时": "Took",
+  "操作": "Actions",
+  "必填，如 https://xxx/v1": "required, e.g. https://xxx/v1",
+  "自定义服务必须填写": "required for custom services",
+  "默认": "default",
+  "服务方模型名": "Provider model name",
+  "翻译：": "Translation:",
+  "配置已保存；受影响阶段将在下次运行时自动重算": "Config saved; affected stages will re-run automatically on next run",
+  "先选择或新建项目": "Select or create a project first",
+  "流水线已启动": "Pipeline started",
+  "确定停止当前流水线": "Stop the current pipeline?",
+  "将强制结束所有子进程。": "All child processes will be force-killed.",
+  "已发送停止指令": "Stop requested",
+  "暂无日志，该阶段可能未运行过）": "no log yet — this stage may not have run)",
+  "编辑层生效中": "Edit layer active",
+  "机器产物（未编辑）": "Machine output (unedited)",
+  "尚无说话人数据，请先跑完 s04": "No speaker data yet — finish s04 first",
+  "角色名": "Character",
+  "参考片段（逗号分隔）": "Reference segments (comma-separated)",
+  "试听": "Audition",
+  "已保存": "Saved",
+  "从 s06 起重跑生效": "re-run from s06 to apply",
+  "尚无译文，请先跑完 s05": "No translation yet — finish s05 first",
+  "没有需要处理的段落": "No flagged segments",
+  "原文": "Source text",
+  "译文（可编辑）": "Translation (editable)",
+  "预算/预估": "Budget/Est.",
+  "策略": "Strategy",
+  "从 s07 起重跑生效": "re-run from s07 to apply",
+  "尚无合成结果，请先跑完 s07": "No TTS output yet — finish s07 first",
+  "时长": "Duration",
+  "成品混音（配音": "Final mix (dub",
+  "背景）": "background)",
+  "纯配音轨": "Dub track only",
+  "原背景": "Original background",
+  "原始音轨": "Original audio",
+  "尚无混音结果，请先跑完 s09": "No mix yet — finish s09 first",
+  "为空，请先跑完 s10": "empty — finish s10 first",
+  "下载": "Download",
+  "成片预览": "Final video preview",
+  "批量运行中": "▶ Batch running",
+  "批量完成": "✔ Batch finished",
+  "退出码": "exit code",
+  "当前:": "Current:",
+  "个 · 完成": "items · done",
+  "结束于": "finished at",
+  "项目": "Project",
+  "质检": "QC",
+  "通过": "passed",
+  "不继承（本地 MarianMT 翻译）": "No inheritance (local MarianMT translation)",
+  "不继承（默认 DeepSeek，未配 Key）": "No inheritance (default DeepSeek, no key set)",
+  "加载失败:": "Load failed:",
+  "请填写视频文件夹": "Please enter a video folder",
+  "批量已启动": "Batch started",
+  "已发送停止": "Stop requested",
+  "请填写项目 ID 并选择源视频": "Please fill in the project ID and pick a source video",
+  "正在复制源文件…": "Copying source file…",
+  "项目已创建：": "Project created:",
+  "设备：": "device:",
+  "此电脑": "This PC",
+  "选择磁盘": "Choose drive",
+  "此目录没有媒体文件": "No media files in this folder",
+  "暂无输出，点击": "No output yet — click",
+  "自检运行中": "Self-test running",
+  "自检中": "testing",
+  "项环境缺失，跑流水线前先运行 setup.bat）": "missing items — run setup.bat before the pipeline)",
+  "自检通过，环境完备": "Self-test passed, environment complete",
+  "自检失败（退出码": "Self-test failed (exit code",
+  "项环境提示": "environment hints",
+  "GPT-SoVITS（v2final）": "GPT-SoVITS (v2final)",
+  "GPT-SoVITS（本机备选）": "GPT-SoVITS (local alt)",
+  "GPT-SoVITS 部署路径": "GPT-SoVITS install path",
+  "GPT-SoVITS 的安装根目录（含 GPT_SoVITS/ 代码与 venv/）；s07 会自动转交它的 venv 执行":
+    "Root of the GPT-SoVITS installation (with GPT_SoVITS/ code and venv/); s07 re-executes through its venv automatically",
+  "IndexTTS-2.5（本机主力）": "IndexTTS-2.5 (local, primary)",
+  "硅基流动 CosyVoice2（云端）": "SiliconFlow CosyVoice2 (cloud)",
+  "硅基流动 CosyVoice2（云端备选）": "SiliconFlow CosyVoice2 (cloud backup)",
+  "硅基流动 API Key": "SiliconFlow API key",
+  "留空则复用翻译阶段的 Key（或环境变量 SILICONFLOW_API_KEY）":
+    "Leave empty to reuse the translation key (or env SILICONFLOW_API_KEY)",
+  "云端备选（2026-10-21 实测通过）：不占本机显存、按量计费（约 ¥1.5–3/万汉字），\n          但参考音频会上传云端（隐私自酌）。先用下方按钮测通再跑——本机引擎优先，仅在显卡被占/无卡时使用":
+    "Cloud backup (verified 2026-10-21): no local VRAM, pay per use (~¥1.5–3 per 10k chars), but reference audio is uploaded to the cloud (privacy is your call). Test with the button below before running — local engines come first; use only when the GPU is busy or unavailable",
+  "🔌 测试连通性": "Test connection",
+  "测试中（首次建音色约需 10 秒）…": "Testing (first voice build takes ~10s)…",
+  "云端试合成样音（项目音色念「测试」）：": "Cloud test sample (project voice says \"test\"):",
+  "主力 IndexTTS-2.5 效果最稳；GPT-SoVITS 相似度上限更高但要单独部署；\n            云端备选不占显卡、按量计费，适合显卡被占/无卡时应急":
+    "IndexTTS-2.5 is the most stable primary; GPT-SoVITS has a higher similarity ceiling but needs a separate deployment; the cloud backup uses no GPU and bills per use — an escape hatch when the GPU is busy or unavailable",
+  "云端引擎不占本机设备（合成在硅基流动机房）":
+    "Cloud engine uses no local device (synthesis runs in SiliconFlow's datacenter)",
+  "TTS：": "TTS: ",
+  "翻译：": "Translation: ",
+  "🔍 质检": "QC check",
+  "重新质检": "Re-run QC",
+  "质检已启动：声纹项逐段计算，约需 1–4 分钟": "QC started: the voiceprint check computes per segment, ~1–4 min",
+  "🔍 质检中…（声纹项逐段计算，退出页面不中断）":
+    "QC running… (per-segment voiceprint; leaving the page won't interrupt it)",
+  "暂无质检结果": "No QC result yet",
+  "——点上方「🔍 质检」开始": "— click \"QC check\" above to start",
+  "（日志不完整，上次质检可能被中断）": "(incomplete log — the last QC run may have been interrupted)",
+  "质检完成": "QC finished",
+};
+
+const I18N_EN_ZH = Object.fromEntries(Object.entries(I18N).map(([k, v]) => [v, k]));
+let I18N_LANG = localStorage.getItem("dub_lang") || "zh";
+const I18N_ORIG = new WeakMap();
+
+function i18nSkip(node) {
+  const p = node.parentElement;
+  return p && (p.tagName === "SCRIPT" || p.tagName === "STYLE");
+}
+
+function i18nApply() {
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+    acceptNode: (n) => (i18nSkip(n) || !n.nodeValue.trim()
+      ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
+  });
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  for (const node of nodes) {
+    if (!I18N_ORIG.has(node)) I18N_ORIG.set(node, node.nodeValue);
+    const orig = I18N_ORIG.get(node);
+    if (I18N_LANG === "en") {
+      let s = orig;
+      for (const [zh, en] of Object.entries(I18N)) {
+        if (s.includes(zh)) s = s.split(zh).join(en);
+      }
+      if (s !== node.nodeValue) node.nodeValue = s;
+    } else if (node.nodeValue !== orig) {
+      node.nodeValue = orig;
+    }
+  }
+  document.title = I18N_LANG === "en"
+    ? document.title.replace("影视配音流水线", "Movie Dubbing Pipeline")
+    : document.title.replace("Movie Dubbing Pipeline", "影视配音流水线");
+}
+
+let i18nTimer = null;
+const i18nObserver = new MutationObserver(() => {
+  if (i18nTimer) return;
+  i18nTimer = setTimeout(() => { i18nTimer = null; i18nApply(); }, 60);
+});
+
+function i18nSetLang(lang) {
+  I18N_LANG = lang;
+  localStorage.setItem("dub_lang", lang);
+  const btn = document.getElementById("lang_toggle");
+  if (btn) btn.textContent = lang === "zh" ? "EN" : "中文";
+  i18nApply();
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  i18nObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
+  const btn = document.getElementById("lang_toggle");
+  if (btn) btn.onclick = () => i18nSetLang(I18N_LANG === "zh" ? "en" : "zh");
+  i18nSetLang(I18N_LANG);
+});
