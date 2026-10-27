@@ -74,6 +74,25 @@
 - `scripts/setup_envs.py` 去掉对本机 Python 路径的硬依赖：改为
   「显式候选 → 环境变量（`MT_PY312`/`MT_PY311`/`MT_UV`）→ py 启动器 → PATH」
   依次查找；`uv` 改为惰性查找，没装 uv 不再挡住 base/sep/asr
+- 离线 wheel 仓库成型（**8.5 GB / 269 个文件**，四个环境全部可离线解析），
+  过程中修掉三个会让整合包"看起来成功、实际装不上"的坑：
+  - **`env_tts` 里没有 pip**（它是 uv 建的 venv），`pip download` 直接
+    `No module named pip`，导致 tts 的 150 个依赖一个都没下，而脚本只打印
+    "下载有失败项"就继续了。修：先 `python -m ensurepip` 补 pip
+  - **`antlr4-python3-runtime==4.9.3` 上游只有 sdist 没有 wheel**（它是
+    omegaconf 的依赖），而脚本用了 `--only-binary=:all:`，一个包卡住整批
+    全部中止。修：改成三轮——①只收 wheel ②放宽到 sdist ③官方源兜底
+  - **`--extra-index-url` 挂官方源会把大量包拖到 32 KB/s**（实测 jieba 的
+    sdist 走官方 10 分钟没下完，走清华镜像秒下）。修：官方源只在第三轮做兜底
+  - 另补 `wheel` 包进仓库：Python 3.12 的 venv 不再自带 setuptools，
+    而 sdist 的 PEP 517 构建默认需要 `setuptools` + `wheel`，缺了会在
+    断网机器上构建失败
+- 新增 `scripts/check_wheelhouse.py`：逐环境跑
+  `pip install --dry-run --ignore-installed --no-index --find-links` 验证仓库完整性。
+  按文件名比对会漏掉 cp311/cp312 张冠李戴（仓库里同时存在两个 torch），
+  只有让 pip 真正解析一遍，才是"在目标机器上装得上"的判据。当前 **4/4 通过**
+- `publish.py` 重建目标目录时改为**改名归档**（`*_bak_时间戳`）而非 `rmtree`：
+  运行时对批量删除（>50 文件）有确认拦截，`rmtree` 会被直接拒掉导致打包中断
 
 
 ---

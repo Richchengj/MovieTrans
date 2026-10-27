@@ -126,8 +126,12 @@ def _mb(n: int) -> str:
 def build_lite(out_root: str, name: str = "MovieTrans-lite") -> Path:
     dst = Path(out_root) / name
     if dst.exists():
-        print(f"清理旧目标: {dst}")
-        shutil.rmtree(dst)
+        # 改名归档而不是删：一来不会误删上次的产物，二来运行时对
+        # 批量删除（>50 文件）有确认拦截，rmtree 会被直接拒掉（2026-10-27 实测）
+        bak = dst.with_name(
+            f"{dst.name}_bak_{__import__('datetime').datetime.now():%Y%m%d_%H%M%S}")
+        print(f"旧目标改名归档: {dst.name} -> {bak.name}")
+        dst.rename(bak)
     dst.mkdir(parents=True)
 
     print("[1/5] scripts/")
@@ -215,8 +219,12 @@ def _write_lite_launchers(dst: Path) -> None:
 def build_full(out_root: str, name: str = "MovieTrans-full", with_models: bool = True) -> Path:
     dst = Path(out_root) / name
     if dst.exists():
-        print(f"清理旧目标: {dst}")
-        shutil.rmtree(dst)
+        # 改名归档而不是删：一来不会误删上次的产物，二来运行时对
+        # 批量删除（>50 文件）有确认拦截，rmtree 会被直接拒掉（2026-10-27 实测）
+        bak = dst.with_name(
+            f"{dst.name}_bak_{__import__('datetime').datetime.now():%Y%m%d_%H%M%S}")
+        print(f"旧目标改名归档: {dst.name} -> {bak.name}")
+        dst.rename(bak)
 
     print("=== 1. 先做 lite 骨架 ===")
     build_lite(out_root, name=name)
@@ -300,7 +308,22 @@ def _install_md(offline: bool) -> str:
 """
     if offline:
         body = """
+## 磁盘预估
+
+| 阶段 | 占用 |
+|---|---|
+| 解压后（源码 + 权重 + wheels） | 约 25 GB |
+| 装完四个环境（envs/） | 约 44 GB |
+| 之后 `wheels/` 可删 | 释放约 10 GB |
+
+建议预留 **80 GB**（含一个项目的中间产物）。
+
 ## 安装（离线，全程不联网）
+
+**唯一的前置**：这台机器要有 Python 3.12 和 3.11
+（[官方安装包](https://www.python.org/downloads/windows/)，装时勾上 py launcher；
+国内可用[华为云镜像](https://mirrors.huaweicloud.com/python/)）。
+其余依赖全部在包内 `wheels/`，不需要联网。
 
 1. 解压到**英文路径**，例如 `D:\\MovieTrans`（路径含中文会让部分 C++ 库报错）
 2. 双击 `安装_离线.bat`

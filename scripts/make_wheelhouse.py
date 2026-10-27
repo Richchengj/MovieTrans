@@ -32,6 +32,8 @@ ROOT = Path(__file__).resolve().parents[1]
 WHEELS = ROOT / "work" / "wheelhouse"
 
 TUNA = "https://pypi.tuna.tsinghua.edu.cn/simple"
+# 兜底源：清华镜像偶尔缺某些历史版本（实测 antlr4-python3-runtime 4.9.3）
+OFFICIAL = "https://pypi.org/simple"
 
 # env 名 -> (目录名, torch 源)
 ENVS = {
@@ -129,18 +131,40 @@ def torch_index_for(lines: list[str], default: str | None) -> str | None:
 
 
 def download(name: str, req_file: Path, dest: Path, lines: list[str]) -> None:
+    """两轮下载：先只收 wheel，缺的再放宽到 sdist。
+
+    有些依赖（典型：antlr4-python3-runtime==4.9.3，omegaconf 的依赖）
+    在上游**只有 sdist 没有 wheel**，`--only-binary=:all:` 会整体中止，
+    一个包卡住整批都下不来。第二轮去掉该限制，sdist 在离线安装时
+    由 pip 现场构建（纯 Python 包不需要编译器）。
+    """
     py = env_python(name)
-    cmd = [str(py), "-m", "pip", "download", "-r", str(req_file), "-d", str(dest),
-           "--only-binary=:all:", "--index-url", TUNA]
+    base = [str(py), "-m", "pip", "download", "-r", str(req_file), "-d", str(dest)]
     torch_idx = torch_index_for(lines, ENVS[name][1])
+    extra = ["--extra-index-url", torch_idx] if torch_idx else []
     if torch_idx:
-        cmd += ["--extra-index-url", torch_idx]
         print(f"[{name}] torch 源: {torch_idx}")
-    print(f"\n[{name}] pip download ...")
-    r = subprocess.run(cmd, text=True)
-    if r.returncode != 0:
-        print(f"[{name}] 下载有失败项（常见：某个包只有 sdist）。")
-        print("       可重跑本脚本续传，或对单个包用 --no-binary :all: 补。")
+
+    rounds = [
+        ("仅 wheel（清华）", base + ["--only-binary=:all:", "--index-url", TUNA] + extra),
+        # 第二轮仍只走清华：sdist 清华也有镜像，速度是官方源的几十倍
+        # （实测 jieba 走官方 32 KB/s，走清华秒下）
+        ("放宽 sdist（清华）", base + ["--index-url", TUNA] + extra),
+        # 第三轮才挂官方源兜底，此时只剩清华彻底缺版本的极少数包
+        ("兜底官方源", base + ["--index-url", TUNA,
+                               "--extra-index-url", OFFICIAL] + extra),
+    ]
+    for i, (label, cmd) in enumerate(rounds, 1):
+        print(f"\n[{name}] 第 {i} 轮 pip download（{label}）...")
+        r = subprocess.run(cmd, text=True)
+        if r.returncode == 0:
+            if i > 1:
+                print(f"[{name}] 第 {i} 轮补齐成功（含少量 sdist，离线安装时现场构建）")
+            return
+        if i < len(rounds):
+            print(f"[{name}] {label} 有缺项，进入下一轮")
+    print(f"[{name}] ! 三轮之后仍有未下载项，离线安装可能缺包")
+    print(f"       可重跑本脚本续传，或手动 pip download 单个包到 {dest}")
 
 
 def main() -> int:
