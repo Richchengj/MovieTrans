@@ -259,7 +259,7 @@ def build_full(out_root: str, name: str = "MovieTrans-full", with_models: bool =
         print("    先运行：python scripts/make_wheelhouse.py")
 
     print("\n=== 5. 离线安装入口 ===")
-    (dst / "安装_离线.bat").write_text(
+    offline_bat = (
         "@echo off\r\n"
         "chcp 65001 >nul\r\n"
         "cd /d \"%~dp0\"\r\n"
@@ -267,9 +267,13 @@ def build_full(out_root: str, name: str = "MovieTrans-full", with_models: bool =
         "echo 从包内 wheels 目录安装，全程不联网\r\n"
         "if not exist \"wheels\" (echo [X] 缺 wheels 目录，这个包不完整 & pause & exit /b 1)\r\n"
         "py -3.12 \"scripts\\setup_envs_offline.py\"\r\n"
-        "pause\r\n",
-        encoding="utf-8",
+        "pause\r\n"
     )
+    (dst / "安装_离线.bat").write_text(offline_bat, encoding="utf-8")
+    # 必须盖掉 lite 骨架留下的联网安装器：整合包里双击它会走 pip 官方源 +
+    # 魔搭下载，在内网机器上白等一小时然后失败，而 `2_启动.bat` 的提示恰好
+    # 也叫用户去点这个文件。两个入口做成同一份内容，点错也走离线。
+    (dst / "1_安装.bat").write_text(offline_bat, encoding="utf-8")
     (dst / "安装说明.md").write_text(_install_md(offline=True), encoding="utf-8")
 
     size = _dir_size(dst)
@@ -326,7 +330,7 @@ def _install_md(offline: bool) -> str:
 其余依赖全部在包内 `wheels/`，不需要联网。
 
 1. 解压到**英文路径**，例如 `D:\\MovieTrans`（路径含中文会让部分 C++ 库报错）
-2. 双击 `安装_离线.bat`
+2. 双击 `安装_离线.bat`（或 `1_安装.bat`，两者内容相同，都是离线安装）
 
 脚本会：用包内 `wheels/` 里的 wheel 建四个 Python 环境（约 10 分钟）。
 权重已在 `models/` 里，不需要下载。
